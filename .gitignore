@@ -1,0 +1,3 @@
+# Runtime artifacts downloaded or created by Mob during local testing.
+/internal/app/cache/
+/internal/app/toolchains/

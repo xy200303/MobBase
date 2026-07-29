@@ -1,0 +1,167 @@
+{
+  "name": "mob-vscode",
+  "displayName": "Mob Mobile Environment",
+  "description": "Manage and use mobile development environments through the Mob CLI.",
+  "version": "0.1.0",
+  "publisher": "mobbase",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "files": [
+    "out",
+    "resources",
+    "README.md"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:mob.devices",
+    "onView:mob.toolchains"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "mob.refresh", "title": "Mob: Refresh", "icon": "$(refresh)" },
+      { "command": "mob.doctor", "title": "Mob: Diagnose Environment", "icon": "$(heart)" },
+      { "command": "mob.createAndroidProject", "title": "Mob: Create Android Project", "icon": "$(new-folder)" },
+      { "command": "mob.createFlutterProject", "title": "Mob: Create Flutter Project", "icon": "$(new-folder)" },
+      { "command": "mob.run", "title": "Mob: Run Project", "icon": "$(play)" },
+      { "command": "mob.build", "title": "Mob: Build Project", "icon": "$(tools)" },
+      { "command": "mob.test", "title": "Mob: Test Project", "icon": "$(beaker)" },
+      { "command": "mob.release", "title": "Mob: Create Release", "icon": "$(package)" },
+      { "command": "mob.logs", "title": "Mob: Follow Project Logs", "icon": "$(output)" },
+      { "command": "mob.installToolchain", "title": "Mob: Install Toolchain Component", "icon": "$(cloud-download)" },
+      { "command": "mob.debug", "title": "Mob: Start Debug Session", "icon": "$(debug-alt)" },
+      { "command": "mob.stopDebug", "title": "Mob: Stop Debug Session", "icon": "$(debug-stop)" },
+      { "command": "mob.selectDevice", "title": "Mob: Select Default Device", "icon": "$(check)" },
+      { "command": "mob.connectDevice", "title": "Mob: Connect Android Device", "icon": "$(plug)" },
+      { "command": "mob.pairDevice", "title": "Mob: Pair Android Device", "icon": "$(key)" },
+      { "command": "mob.createAndroidEmulator", "title": "Mob: Create Android Emulator", "icon": "$(vm)" },
+      { "command": "mob.startAndroidEmulator", "title": "Mob: Start Android Emulator", "icon": "$(play)" },
+      { "command": "mob.stopAndroidEmulator", "title": "Mob: Stop Android Emulator", "icon": "$(debug-stop)" },
+      { "command": "mob.openDevice", "title": "Mob: Open Device", "icon": "$(device-mobile)" },
+      { "command": "mob.openOutput", "title": "Mob: Show Output", "icon": "$(output)" }
+    ],
+    "configuration": {
+      "title": "Mob",
+      "properties": {
+        "mob.path": {
+          "type": "string",
+          "default": "mob",
+          "description": "Path or command name for the Mob CLI executable."
+        },
+        "mob.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refresh Mob status when the active workspace changes."
+        },
+        "mob.autoAttachNativeDebug": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically attach the installed Java debug extension when Mob returns an Android JDWP target."
+        }
+      }
+    },
+    "taskDefinitions": [
+      {
+        "type": "mob",
+        "required": ["command"],
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": ["build", "run", "test", "release", "logs"],
+            "description": "Mob workflow to run."
+          },
+          "platform": {
+            "type": "string",
+            "enum": ["android", "ios", "harmony"],
+            "description": "Explicit target platform."
+          },
+          "device": {
+            "type": "string",
+            "description": "Explicit Mob device ID, such as android:emulator-5554."
+          },
+          "artifact": {
+            "type": "string",
+            "enum": ["apk", "aab", "ipa", "hap"],
+            "description": "Release artifact type. Only valid for release tasks."
+          },
+          "output": {
+            "type": "string",
+            "description": "Directory to receive a copied release artifact. Only valid for release tasks."
+          },
+          "noInstall": {
+            "type": "boolean",
+            "description": "Disable automatic toolchain installation."
+          },
+          "acceptLicenses": {
+            "type": "boolean",
+            "description": "Accept required official toolchain licenses."
+          },
+          "mirror": {
+            "type": "boolean",
+            "description": "Open a controllable mirror for a physical Android device. Only valid for run tasks."
+          },
+          "headless": {
+            "type": "boolean",
+            "description": "Start an automatically created Android emulator without a window. Only valid for run tasks."
+          },
+          "noDeviceCreate": {
+            "type": "boolean",
+            "description": "Do not create a missing Android virtual device. Only valid for run tasks."
+          },
+          "follow": {
+            "type": "boolean",
+            "description": "Continue streaming project logs. Only valid for logs tasks."
+          }
+        }
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mob",
+          "title": "Mob",
+          "icon": "resources/mob.svg"
+        }
+      ]
+    },
+    "views": {
+      "mob": [
+        { "id": "mob.toolchains", "name": "Toolchains" },
+        { "id": "mob.devices", "name": "Devices" }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        { "command": "mob.installToolchain", "when": "view == mob.toolchains", "group": "navigation@1" },
+        { "command": "mob.createAndroidProject", "when": "view == mob.toolchains", "group": "navigation@2" },
+        { "command": "mob.build", "when": "view == mob.toolchains", "group": "navigation@3" },
+        { "command": "mob.run", "when": "view == mob.toolchains", "group": "navigation@4" },
+        { "command": "mob.refresh", "when": "view == mob.toolchains", "group": "navigation" },
+        { "command": "mob.selectDevice", "when": "view == mob.devices", "group": "navigation@1" },
+        { "command": "mob.connectDevice", "when": "view == mob.devices", "group": "navigation@2" },
+        { "command": "mob.pairDevice", "when": "view == mob.devices", "group": "navigation@3" },
+        { "command": "mob.createAndroidEmulator", "when": "view == mob.devices", "group": "navigation@4" },
+        { "command": "mob.startAndroidEmulator", "when": "view == mob.devices", "group": "navigation@5" },
+        { "command": "mob.refresh", "when": "view == mob.devices", "group": "navigation" }
+      ],
+      "view/item/context": [
+        { "command": "mob.openDevice", "when": "view == mob.devices && (viewItem == mob.device || viewItem == mob.emulator)", "group": "inline@1" },
+        { "command": "mob.selectDevice", "when": "view == mob.devices && (viewItem == mob.device || viewItem == mob.emulator)", "group": "inline@2" },
+        { "command": "mob.stopAndroidEmulator", "when": "view == mob.devices && viewItem == mob.emulator", "group": "inline@3" }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/vscode": "^1.95.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -94,7 +94,7 @@ chmod +x scripts/install.sh
 ./scripts/install.sh
 ```
 
-两者均需 Go `1.26` 或更高版本。脚本在当前源码仓库中执行时构建本地代码；独立脚本可通过 `--version <version>` 从 `github.com/mobbase/mob/cmd/mob` 安装版本。常用参数：
+两者均需 Go `1.26` 或更高版本。脚本在当前源码仓库中执行时构建本地代码；独立脚本可通过 `--version <version>` 从 `github.com/xy200303/MobBase/cmd/mob` 安装版本。常用参数：
 
 ```powershell
 .\scripts\install.ps1 -InstallDir D:\tools\mob\bin -NoPath
