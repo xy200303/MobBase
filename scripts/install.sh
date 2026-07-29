@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODULE_PATH="github.com/xy200303/MobBase/cmd/mob"
+RELEASE_API="https://api.github.com/repos/xy200303/MobBase/releases"
 VERSION="latest"
-VERSION_EXPLICIT=0
 SOURCE_PATH=""
 INSTALL_DIR=""
 NO_PATH=0
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [--version <version>] [--source <path>] [--install-dir <path>] [--no-path]
+Usage: install.sh [--version <tag|latest>] [--source <path>] [--install-dir <path>] [--no-path]
 
-Install Mob from a local source checkout or the Go module. The default install
-directory is $MOB_INSTALL_DIR, $MOB_HOME/bin, or ~/.mob/bin.
+Install a verified Mob release binary. Go is needed only when --source is used.
+The default install directory is $MOB_INSTALL_DIR, $MOB_HOME/bin, or ~/.mob/bin.
 EOF
 }
 
@@ -27,7 +26,6 @@ while [[ $# -gt 0 ]]; do
     --version)
       [[ $# -ge 2 ]] || fail "--version requires a value"
       VERSION="$2"
-      VERSION_EXPLICIT=1
       shift 2
       ;;
     --source)
@@ -48,13 +46,9 @@ while [[ $# -gt 0 ]]; do
       usage
       exit 0
       ;;
-    *)
-      fail "unknown argument: $1"
-      ;;
+    *) fail "unknown argument: $1" ;;
   esac
 done
-
-command -v go >/dev/null 2>&1 || fail "Go 1.26 or later is required. Install Go, then rerun this script."
 
 if [[ -z "$INSTALL_DIR" ]]; then
   if [[ -n "${MOB_INSTALL_DIR:-}" ]]; then
@@ -67,26 +61,45 @@ if [[ -z "$INSTALL_DIR" ]]; then
 fi
 mkdir -p "$INSTALL_DIR"
 
-if [[ -z "$SOURCE_PATH" && $VERSION_EXPLICIT -eq 0 ]]; then
-  SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-  CANDIDATE="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-  if [[ -f "$CANDIDATE/go.mod" ]]; then
-    SOURCE_PATH="$CANDIDATE"
-  fi
-fi
-
 if [[ -n "$SOURCE_PATH" ]]; then
+  command -v go >/dev/null 2>&1 || fail "Go 1.26 or later is required only with --source. Omit it to install a release binary."
   SOURCE_PATH="$(cd -- "$SOURCE_PATH" && pwd)"
   [[ -f "$SOURCE_PATH/go.mod" ]] || fail "--source must point to a Mob source checkout containing go.mod"
   BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mob-install.XXXXXX")"
   trap 'rm -rf "$BUILD_DIR"' EXIT
   (
     cd "$SOURCE_PATH"
-    go build -o "$BUILD_DIR/mob" ./cmd/mob
+    go build -trimpath -o "$BUILD_DIR/mob" ./cmd/mob
   )
   install -m 0755 "$BUILD_DIR/mob" "$INSTALL_DIR/mob"
 else
-  GOBIN="$INSTALL_DIR" go install "$MODULE_PATH@$VERSION"
+  command -v curl >/dev/null 2>&1 || fail "curl is required to download a Mob release binary."
+  case "$(uname -s):$(uname -m)" in
+    Darwin:arm64) ASSET_NAME="mob-darwin-arm64" ;;
+    Darwin:x86_64) ASSET_NAME="mob-darwin-amd64" ;;
+    Linux:x86_64) ASSET_NAME="mob-linux-amd64" ;;
+    Linux:aarch64) ASSET_NAME="mob-linux-arm64" ;;
+    *) fail "No Mob release artifact is defined for $(uname -s) $(uname -m). Use --source to build locally." ;;
+  esac
+  if [[ "$VERSION" == "latest" ]]; then
+    VERSION="$(curl -fsSL -H 'User-Agent: MobBase-Installer' "$RELEASE_API/latest" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    [[ -n "$VERSION" ]] || fail "Could not resolve the latest GitHub Release tag."
+  fi
+  ASSET_URL="https://github.com/xy200303/MobBase/releases/download/$VERSION/$ASSET_NAME"
+  BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mob-install.XXXXXX")"
+  trap 'rm -rf "$BUILD_DIR"' EXIT
+  curl -fsSL --retry 3 -o "$BUILD_DIR/$ASSET_NAME" "$ASSET_URL"
+  EXPECTED="$(curl -fsSL "$ASSET_URL.sha256" | grep -Eo '[A-Fa-f0-9]{64}' | head -n 1)"
+  [[ ${#EXPECTED} -eq 64 ]] || fail "Release $VERSION does not provide a valid $ASSET_NAME.sha256 file."
+  if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL="$(sha256sum "$BUILD_DIR/$ASSET_NAME" | awk '{print $1}')"
+  else
+    ACTUAL="$(shasum -a 256 "$BUILD_DIR/$ASSET_NAME" | awk '{print $1}')"
+  fi
+  ACTUAL="$(printf '%s' "$ACTUAL" | tr '[:upper:]' '[:lower:]')"
+  EXPECTED="$(printf '%s' "$EXPECTED" | tr '[:upper:]' '[:lower:]')"
+  [[ "$ACTUAL" == "$EXPECTED" ]] || fail "Downloaded $ASSET_NAME does not match the release SHA-256."
+  install -m 0755 "$BUILD_DIR/$ASSET_NAME" "$INSTALL_DIR/mob"
 fi
 
 add_to_path() {

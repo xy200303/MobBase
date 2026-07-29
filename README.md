@@ -81,7 +81,7 @@ Mob 不会永久修改系统 `PATH`、`JAVA_HOME`、`ANDROID_HOME` 或 `ANDROID_
 
 ### 一键安装脚本
 
-仓库提供跨平台安装脚本。它们将 CLI 安装到 `MOB_INSTALL_DIR`、`MOB_HOME/bin` 或默认的 `~/.mob/bin`，并默认只更新当前用户的 `PATH`。安装器不会请求管理员权限，也不会修改 Android/JDK 环境变量。
+仓库提供跨平台安装脚本。它们默认从 `xy200303/MobBase` 的 GitHub Release 下载当前宿主系统的最终二进制产物与同名 `.sha256` 校验文件，校验通过后安装到 `MOB_INSTALL_DIR`、`MOB_HOME/bin` 或默认的 `~/.mob/bin`，并默认只更新当前用户的 `PATH`。安装器不会请求管理员权限，也不会修改 Android/JDK 环境变量。
 
 Windows PowerShell：
 
@@ -96,16 +96,27 @@ chmod +x scripts/install.sh
 ./scripts/install.sh
 ```
 
-两者均需 Go `1.26` 或更高版本。脚本在当前源码仓库中执行时构建本地代码；独立脚本可通过 `--version <version>` 从 `github.com/xy200303/MobBase/cmd/mob` 安装版本。常用参数：
+默认安装不需要 Go。`--version <tag>` 选择特定 Release（默认 `latest`）；只有显式传入 `-SourcePath` / `--source` 进行本地源码开发构建时才需要 Go `1.26` 或更高版本。每个 Release 必须发布与产物同名的 `.sha256` 文件，例如 `mob-windows-amd64.exe.sha256`。常用参数：
 
 ```powershell
 .\scripts\install.ps1 -InstallDir D:\tools\mob\bin -NoPath
-.\scripts\install.ps1 -Version latest
+.\scripts\install.ps1 -Version v0.1.0
+.\scripts\install.ps1 -SourcePath .
 ```
 
 ```bash
 ./scripts/install.sh --install-dir "$HOME/.local/bin" --no-path
-./scripts/install.sh --version latest
+./scripts/install.sh --version v0.1.0
+./scripts/install.sh --source .
+```
+
+### 发布
+
+推送 `v*` 格式的 Git tag 会触发 GitHub Actions Release 工作流。工作流运行测试和 `go vet`，交叉编译 Windows x64、macOS x64/Apple Silicon、Linux x64/ARM64，随后为每个产物生成同名 `.sha256` 并上传到 GitHub Release；安装脚本只接受这套固定命名的已校验产物。
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 ## 快速开始

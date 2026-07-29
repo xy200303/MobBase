@@ -1,0 +1,76 @@
+name: Release Mob
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing Git tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify source
+        run: |
+          go test ./... -count=1 -timeout 120s
+          go vet ./...
+          bash -n scripts/install.sh
+
+      - name: Build release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o dist/mob-windows-amd64.exe ./cmd/mob
+          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o dist/mob-darwin-amd64 ./cmd/mob
+          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags='-s -w' -o dist/mob-darwin-arm64 ./cmd/mob
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o dist/mob-linux-amd64 ./cmd/mob
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags='-s -w' -o dist/mob-linux-arm64 ./cmd/mob
+          for artifact in dist/mob-*; do
+            base="$(basename "$artifact")"
+            (cd dist && sha256sum "$base" > "$base.sha256")
+          done
+          ./dist/mob-linux-amd64 help --format json >/dev/null
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mob-${{ env.RELEASE_TAG }}
+          path: dist/
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse "$RELEASE_TAG^{commit}" >/dev/null
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* --verify-tag --title "Mob $RELEASE_TAG" --generate-notes
+          fi

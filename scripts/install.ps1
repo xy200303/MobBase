@@ -7,7 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$modulePath = "github.com/xy200303/MobBase/cmd/mob"
+$releaseAPI = "https://api.github.com/repos/xy200303/MobBase/releases"
 
 function Write-InstallError([string]$Message) {
     Write-Error "Mob installation failed: $Message"
@@ -20,18 +20,51 @@ function Add-UserPath([string]$Directory) {
     if (-not [string]::IsNullOrWhiteSpace($current)) {
         $entries = @($current -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     }
-    $exists = $entries | Where-Object { $_.TrimEnd("\\") -ieq $Directory.TrimEnd("\\") }
+    $exists = $entries | Where-Object { $_.TrimEnd("\") -ieq $Directory.TrimEnd("\") }
     if (-not $exists) {
-        $updated = @($entries + $Directory) -join ";"
-        [Environment]::SetEnvironmentVariable("Path", $updated, "User")
+        [Environment]::SetEnvironmentVariable("Path", (@($entries + $Directory) -join ";"), "User")
     }
-    if (($env:Path -split ";" | Where-Object { $_.TrimEnd("\\") -ieq $Directory.TrimEnd("\\") }).Count -eq 0) {
+    if (($env:Path -split ";" | Where-Object { $_.TrimEnd("\") -ieq $Directory.TrimEnd("\") }).Count -eq 0) {
         $env:Path = "$Directory;$env:Path"
     }
 }
 
-if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
-    Write-InstallError "Go 1.26 or later is required. Install Go, reopen PowerShell, then rerun this script."
+function Resolve-ReleaseTag([string]$RequestedVersion) {
+    if ($RequestedVersion -ne "latest") {
+        return $RequestedVersion
+    }
+    try {
+        $release = Invoke-RestMethod -Uri "$releaseAPI/latest" -Headers @{ "User-Agent" = "MobBase-Installer" }
+    } catch {
+        Write-InstallError "Could not resolve the latest GitHub Release: $($_.Exception.Message)"
+    }
+    if ([string]::IsNullOrWhiteSpace($release.tag_name)) {
+        Write-InstallError "The latest GitHub Release does not contain a tag name."
+    }
+    return $release.tag_name
+}
+
+function Install-ReleaseBinary([string]$Destination) {
+    $tag = Resolve-ReleaseTag $Version
+    $assetName = "mob-windows-amd64.exe"
+    $escapedTag = [uri]::EscapeDataString($tag)
+    $assetURL = "https://github.com/xy200303/MobBase/releases/download/$escapedTag/$assetName"
+    $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("mob-" + [System.Guid]::NewGuid().ToString() + ".exe")
+    try {
+        Invoke-WebRequest -Uri $assetURL -OutFile $temporary
+        $checksumText = (Invoke-WebRequest -Uri "$assetURL.sha256").Content
+        $expected = [regex]::Match($checksumText, "(?i)\b[a-f0-9]{64}\b").Value.ToLowerInvariant()
+        if ($expected.Length -ne 64) {
+            Write-InstallError "Release $tag does not provide a valid $assetName.sha256 file."
+        }
+        $actual = (Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actual -ne $expected) {
+            Write-InstallError "Downloaded $assetName does not match the release SHA-256."
+        }
+        Copy-Item -LiteralPath $temporary -Destination $Destination -Force
+    } finally {
+        Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
+    }
 }
 
 if ([string]::IsNullOrWhiteSpace($InstallDir)) {
@@ -45,51 +78,37 @@ if ([string]::IsNullOrWhiteSpace($InstallDir)) {
 }
 $InstallDir = [System.IO.Path]::GetFullPath($InstallDir)
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-
-if ([string]::IsNullOrWhiteSpace($SourcePath) -and -not $PSBoundParameters.ContainsKey("Version")) {
-    $candidate = Join-Path $PSScriptRoot ".."
-    if (Test-Path (Join-Path $candidate "go.mod")) {
-        $SourcePath = $candidate
-    }
-}
+$mob = Join-Path $InstallDir "mob.exe"
 
 if (-not [string]::IsNullOrWhiteSpace($SourcePath)) {
+    if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
+        Write-InstallError "Go 1.26 or later is required only with -SourcePath. Omit it to install a release binary."
+    }
     $SourcePath = (Resolve-Path $SourcePath).Path
     if (-not (Test-Path (Join-Path $SourcePath "go.mod"))) {
         Write-InstallError "-SourcePath must point to a Mob source checkout containing go.mod."
     }
-    $temporaryBinary = Join-Path ([System.IO.Path]::GetTempPath()) ("mob-" + [System.Guid]::NewGuid().ToString() + ".exe")
+    $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("mob-" + [System.Guid]::NewGuid().ToString() + ".exe")
     try {
         Push-Location $SourcePath
-        & go build -o $temporaryBinary ./cmd/mob
+        & go build -trimpath -o $temporary ./cmd/mob
         if ($LASTEXITCODE -ne 0) {
             Write-InstallError "go build returned exit code $LASTEXITCODE."
         }
-        Copy-Item -LiteralPath $temporaryBinary -Destination (Join-Path $InstallDir "mob.exe") -Force
+        Copy-Item -LiteralPath $temporary -Destination $mob -Force
     } finally {
         Pop-Location -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath $temporaryBinary -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
     }
 } else {
-    $previousGoBin = $env:GOBIN
-    try {
-        $env:GOBIN = $InstallDir
-        & go install "$modulePath@$Version"
-        if ($LASTEXITCODE -ne 0) {
-            Write-InstallError "go install returned exit code $LASTEXITCODE."
-        }
-    } finally {
-        $env:GOBIN = $previousGoBin
-    }
+    Install-ReleaseBinary $mob
 }
 
 if (-not $NoPath) {
     Add-UserPath $InstallDir
 }
 
-$mob = Join-Path $InstallDir "mob.exe"
 & $mob help | Select-Object -First 2
-
 Write-Host "Mob installed to $mob"
 if ($NoPath) {
     Write-Host "Add $InstallDir to PATH before running mob from a new terminal."
