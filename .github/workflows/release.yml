@@ -48,7 +48,12 @@ jobs:
           GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags='-s -w' -o dist/mob-darwin-arm64 ./cmd/mob
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o dist/mob-linux-amd64 ./cmd/mob
           GOOS=linux GOARCH=arm64 go build -trimpath -ldflags='-s -w' -o dist/mob-linux-arm64 ./cmd/mob
-          for artifact in dist/mob-*; do
+          for artifact in \
+            dist/mob-windows-amd64.exe \
+            dist/mob-darwin-amd64 \
+            dist/mob-darwin-arm64 \
+            dist/mob-linux-amd64 \
+            dist/mob-linux-arm64; do
             base="$(basename "$artifact")"
             (cd dist && sha256sum "$base" > "$base.sha256")
           done
