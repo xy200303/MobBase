@@ -91,8 +91,8 @@ func (r runtime) debug(ctx context.Context, args []string) error {
 		if device.Kind != "physical" {
 			return &codedError{Code: "MOB_DEVICE_UNAVAILABLE", Message: "--mirror requires a connected physical Android device.", Remediation: "Use the official Emulator window without --mirror, or choose a physical device with --device."}
 		}
-		if err := android.MirrorDevice(ctx, device.NativeID); err != nil {
-			return &codedError{Code: "MOB_TOOLCHAIN_MISSING", Message: err.Error(), Remediation: "Install scrcpy through its official distribution, then rerun mob debug --mirror."}
+		if _, err := r.startAndroidMirror(ctx, device.NativeID, "mob debug"); err != nil {
+			return err
 		}
 		if err := r.emit("preview", "mob debug", true, map[string]interface{}{"kind": "physical-mirror", "device": device, "client": "scrcpy"}, nil); err != nil {
 			return err

@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
 	"github.com/xy200303/MobBase/internal/platform/android"
 	javaplatform "github.com/xy200303/MobBase/internal/platform/java"
+	"github.com/xy200303/MobBase/internal/state"
 )
 
 type sdkAvailableOptions struct {
@@ -154,6 +156,28 @@ func (r runtime) emulatorImageAvailable(ctx context.Context, args []string) erro
 	if err != nil {
 		return err
 	}
+	config, err := r.store.Load()
+	if err != nil {
+		return err
+	}
+	if sdks, discoverErr := android.Discover(config); discoverErr == nil {
+		for _, sdk := range preferredSDKs(sdks) {
+			if _, found := android.SDKManager(sdk.Path); !found {
+				continue
+			}
+			items, listErr := android.ListAvailableSystemImages(ctx, sdk.Path)
+			if listErr != nil {
+				return &codedError{Code: "MOB_CATALOG_UNAVAILABLE", Message: listErr.Error(), Remediation: "Check Android repository access and retry."}
+			}
+			items = filterSystemImages(items, options.API)
+			data := map[string]interface{}{"source": "sdkmanager", "cached": false, "sdk": sdk.Name, "items": items}
+			if r.json {
+				return r.result("mob android emulator image available", data)
+			}
+			writeSystemImageTable(r.out, items, "sdkmanager", sdk.Name)
+			return nil
+		}
+	}
 	catalog, err := android.LoadCatalog(ctx, android.CatalogCachePath(r.home), options.Refresh)
 	if err != nil {
 		return &codedError{Code: "MOB_CATALOG_UNAVAILABLE", Message: err.Error(), Remediation: "Check access to the Android official repository or retry with a cached catalog."}
@@ -163,10 +187,78 @@ func (r runtime) emulatorImageAvailable(ctx context.Context, args []string) erro
 	if r.json {
 		return r.result("mob android emulator image available", data)
 	}
-	for _, item := range items {
-		fmt.Fprintf(r.out, "%s\t%s\t%d\t%s\n", item.PackageID, item.Version, item.Size, item.ChecksumAlgorithm)
-	}
+	writeSystemImageTable(r.out, items, "Android catalog", "")
 	return nil
+}
+
+func writeSystemImageTable(output io.Writer, items []android.CatalogItem, source, sdk string) {
+	title := "Available Android system images"
+	if source != "" {
+		title += " (source: " + source
+		if sdk != "" {
+			title += "; SDK: " + sdk
+		}
+		title += ")"
+	}
+	fmt.Fprintln(output, title)
+	if len(items) == 0 {
+		fmt.Fprintln(output, "  No matching images are available.")
+		return
+	}
+	fmt.Fprintf(output, "  %-5s %-34s %-12s %s\n", "API", "IMAGE", "ABI", "REV")
+	for _, item := range items {
+		api, image, abi, parsed := systemImageFields(item.PackageID)
+		if !parsed {
+			fmt.Fprintf(output, "  %-5s %-34s %-12s %s\n", "-", item.PackageID, "-", item.Version)
+			continue
+		}
+		fmt.Fprintf(output, "  %-5s %-34s %-12s %s\n", api, image, abi, item.Version)
+	}
+	fmt.Fprintln(output, "\nInstall one image:")
+	fmt.Fprintln(output, "  mob android emulator image install \"system-images;android-<API>;<IMAGE>;<ABI>\" --sdk <sdk-name> --accept-licenses")
+	fmt.Fprintln(output, "  Use --json when a script needs full package IDs and metadata.")
+}
+
+func systemImageFields(packageID string) (api, image, abi string, parsed bool) {
+	parts := strings.Split(packageID, ";")
+	if len(parts) != 4 || parts[0] != "system-images" || !strings.HasPrefix(parts[1], "android-") {
+		return "", "", "", false
+	}
+	return strings.TrimPrefix(parts[1], "android-"), parts[2], parts[3], true
+}
+
+func preferredSDKs(sdks []android.SDK) []android.SDK {
+	ordered := make([]android.SDK, 0, len(sdks))
+	for _, sdk := range sdks {
+		if sdk.Current {
+			ordered = append(ordered, sdk)
+		}
+	}
+	for _, sdk := range sdks {
+		if !sdk.Current && sdk.Ownership == state.OwnershipManaged {
+			ordered = append(ordered, sdk)
+		}
+	}
+	for _, sdk := range sdks {
+		if !sdk.Current && sdk.Ownership != state.OwnershipManaged {
+			ordered = append(ordered, sdk)
+		}
+	}
+	return ordered
+}
+
+func filterSystemImages(items []android.CatalogItem, api int) []android.CatalogItem {
+	if api == 0 {
+		return items
+	}
+	prefix := fmt.Sprintf("system-images;android-%d;", api)
+	filtered := make([]android.CatalogItem, 0)
+	for _, item := range items {
+		if strings.HasPrefix(item.PackageID, prefix) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
 }
 
 func (r runtime) emulatorImageInstall(ctx context.Context, args []string) error {

@@ -154,12 +154,12 @@ mob harmony doctor                      保留命名空间：暂返回 `MOB_PLAT
 mob device list [--platform android|ios]
                                         统一列出 ADB Android 真机/模拟器，以及 macOS 上的 Xcode iOS Simulator
 mob device use <platform:native-id>     选择默认运行设备
-mob device open android:<id>            唤醒 Android 模拟器，或通过 scrcpy 打开真机实时窗口
+mob device open android:<id>            唤醒 Android 模拟器，或自动准备 Mob 真机预览运行时并打开实时窗口
 mob device screenshot android:<id> [--output <path>]
                                         通过 ADB 保存真机或模拟器 PNG 截图
 mob device record android:<id> [--output <path>] [--seconds <1-180>]
                                         通过 ADB 录制并保存 MP4
-mob device mirror <id>                  可选：真机实时镜像
+mob device mirror <id>                  真机实时镜像（首次自动准备 Mob 内部运行时）
 mob device forward remove android:<id> --port <n>
                                         移除 `mob debug` 创建的本机 ADB JDWP 转发
 
@@ -179,6 +179,8 @@ mob release check [--platform <id>]     签名前和发布前检查
 ```
 
 所有查询和有限工作流命令支持 `--json`，提供一个终态的稳定结构化结果给 VS Code 插件、CI 和 AI 工具；需要持续输出的命令使用 `--json=events` 提供 JSON Lines 事件流。普通用户不需要使用或理解这些参数。
+
+普通终端模式下，Mob 将阶段提示、可确定总大小的下载进度条和筛选后的官方安装状态写入标准错误；标准输出保留给命令结果。交互式终端用单行更新进度，重定向输出时按阶段写入可读日志。Mob 不转发 Windows 批处理命令回显或完整许可证正文。`--json` 和 `--json=events` 禁用这些人类终端 UI，确保标准输出始终可直接由插件、CI 和 AI 解析。
 
 当前 CLI 的 `mob env show` 是只读诊断：返回 Mob 根目录、当前 Android SDK/JDK/Flutter、默认设备以及 `child-process-only` 范围。Mob 不持久化改写系统 PATH、`JAVA_HOME` 或 Android 环境变量，因此不提供会误导用户的 `env restore`；构建和运行只在被启动的官方子进程中注入所需变量。
 
@@ -292,9 +294,9 @@ mob run --device android:R58N123456A
 
 Android 通过 ADB 管理 USB 真机、无线真机和 Emulator。ADB 是 Android SDK 的 `platform-tools` 组件，在 `mob android sdk inspect` 中展示，不作为独立 SDK 管理。
 
-Mob 启动 Android Emulator 的官方原生窗口，直接提供实时画面、触控、键盘、定位、网络、摄像头和录屏等能力。Mob 不在 VS Code Webview 中重做模拟器。对于 Android 真机，`mob device mirror` 可选接入成熟的镜像工具；iOS/HarmonyOS 仅在官方或受支持能力可用时提供镜像。
+Mob 启动 Android Emulator 的官方原生窗口，直接提供实时画面、触控、键盘、定位、网络、摄像头和录屏等能力。Mob 不在 VS Code Webview 中重做模拟器。对于 Android 真机，`mob device mirror` 是 Mob 内置的预览能力；首次调用时会自动准备所需运行时。iOS/HarmonyOS 仅在官方或受支持能力可用时提供镜像。
 
-当前 Android CLI 的 `mob device mirror <android:native-id>` 要求目标是真实、ready 的 ADB 设备，并调用 PATH 中已安装的 `scrcpy --serial <native-id>` 打开低延迟镜像和输入窗口。Mob 不下载、嵌入或改写 scrcpy，也不对 Emulator 启动镜像，避免替代官方 Emulator 窗口。
+当前 Android CLI 的 `mob device mirror <android:native-id>` 要求目标是真实、ready 的 ADB 设备。首次使用时 Mob 从 Genymobile 官方 GitHub Release 获取 Windows x64 预览运行时，校验 Release 元数据提供的 SHA-256，并解压到 `~/.mob/runtime/scrcpy`；它不会依赖或修改系统 PATH，也不要求用户单独安装或管理 `scrcpy`。运行时由 Mob 以 `--serial <native-id>` 启动低延迟镜像和输入窗口。它不对 Emulator 启动镜像，避免替代官方 Emulator 窗口。
 
 `mob run --mirror --device android:<native-id>` 复用相同规则：在构建与启动应用前打开真机镜像窗口，并在 `--json` 事件流中发送 `preview` 事件。对 Emulator 使用该选项会直接报错，用户应使用官方 Emulator 窗口。
 

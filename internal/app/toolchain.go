@@ -54,7 +54,7 @@ func (r runtime) prepareAndroidSDK(ctx context.Context, root, command string, re
 	if err := r.bootstrapManagedSDK(ctx, target, catalog, command); err != nil {
 		return android.SDK{}, requirements, err
 	}
-	if _, err := android.InstallPackages(ctx, android.InstallRequest{Root: target.Path, Packages: packages, AcceptLicenses: true, Environment: androidProxyEnvironment(config)}); err != nil {
+	if _, err := android.InstallPackages(ctx, android.InstallRequest{Root: target.Path, Packages: packages, AcceptLicenses: true, Environment: androidProxyEnvironment(config), Output: r.sdkManagerOutput()}); err != nil {
 		return android.SDK{}, requirements, &codedError{Code: "MOB_COMMAND_FAILED", Message: err.Error(), Remediation: "Check Android repository access and the accepted SDK licenses, then retry."}
 	}
 	r.registerManagedSDK(&config, target)
@@ -87,13 +87,17 @@ func (r runtime) prepareAndroidEmulator(ctx context.Context, sdk android.SDK, re
 	if !acceptLicenses {
 		return android.SDK{}, &codedError{Code: "MOB_LICENSE_REQUIRED", Message: "An Android Emulator and system image are required before Mob can create a device.", Remediation: "Review the Android SDK license, then repeat with --accept-licenses."}
 	}
-	catalog, err := android.LoadCatalog(ctx, android.CatalogCachePath(r.home), false)
+	images, err := android.ListAvailableSystemImages(ctx, sdk.Path)
 	if err != nil {
 		return android.SDK{}, &codedError{Code: "MOB_CATALOG_UNAVAILABLE", Message: err.Error(), Remediation: "Restore Android repository access and retry."}
 	}
-	image, found := defaultSystemImagePackage(catalog, requirements.CompileSDK)
+	image, found := defaultSystemImagePackage(images, requirements.CompileSDK)
 	if !found {
-		return android.SDK{}, &codedError{Code: "MOB_PACKAGE_NOT_AVAILABLE", Message: fmt.Sprintf("No Google APIs system image for Android API %d is available on this host.", requirements.CompileSDK), Remediation: "Run mob android sdk available --api <level> --refresh and install a supported system image."}
+		return android.SDK{}, &codedError{Code: "MOB_PACKAGE_NOT_AVAILABLE", Message: fmt.Sprintf("No Google APIs system image for Android API %d is available on this host.", requirements.CompileSDK), Remediation: "Run mob android emulator image available --api <level> and install a supported system image."}
+	}
+	catalog, err := android.LoadCatalog(ctx, android.CatalogCachePath(r.home), false)
+	if err != nil {
+		return android.SDK{}, &codedError{Code: "MOB_CATALOG_UNAVAILABLE", Message: err.Error(), Remediation: "Restore Android repository access and retry."}
 	}
 	config, err := r.store.Load()
 	if err != nil {
@@ -112,6 +116,9 @@ func (r runtime) prepareAndroidEmulator(ctx context.Context, sdk android.SDK, re
 	packages := append(requiredAndroidPackages(requirements, true), "emulator", image)
 	packages = uniquePackages(packages)
 	for _, packageID := range packages {
+		if packageID == image {
+			continue
+		}
 		if _, found := catalog.FindPackage(packageID); !found {
 			return android.SDK{}, &codedError{Code: "MOB_PACKAGE_NOT_AVAILABLE", Message: "Android package " + packageID + " is not in the current catalog.", Remediation: "Run mob android sdk available --refresh and retry."}
 		}
@@ -122,7 +129,7 @@ func (r runtime) prepareAndroidEmulator(ctx context.Context, sdk android.SDK, re
 	if err := r.bootstrapManagedSDK(ctx, sdk, catalog, command); err != nil {
 		return android.SDK{}, err
 	}
-	if _, err := android.InstallPackages(ctx, android.InstallRequest{Root: sdk.Path, Packages: packages, AcceptLicenses: true, Environment: androidProxyEnvironment(config)}); err != nil {
+	if _, err := android.InstallPackages(ctx, android.InstallRequest{Root: sdk.Path, Packages: packages, AcceptLicenses: true, Environment: androidProxyEnvironment(config), Output: r.sdkManagerOutput()}); err != nil {
 		return android.SDK{}, &codedError{Code: "MOB_COMMAND_FAILED", Message: err.Error(), Remediation: "Check Android repository access and the accepted SDK licenses, then retry."}
 	}
 	r.registerManagedSDK(&config, sdk)
@@ -198,14 +205,14 @@ func (r runtime) validateCatalogPackages(ctx context.Context, packages []string)
 	return catalog, nil
 }
 
-func defaultSystemImagePackage(catalog android.Catalog, api int) (string, bool) {
+func defaultSystemImagePackage(items []android.CatalogItem, api int) (string, bool) {
 	prefix := fmt.Sprintf("system-images;android-%d;google_apis;", api)
 	preferredABI := "x86_64"
 	if goruntime.GOARCH == "arm64" {
 		preferredABI = "arm64-v8a"
 	}
 	var fallback string
-	for _, item := range catalog.Items {
+	for _, item := range items {
 		if !strings.HasPrefix(item.PackageID, prefix) {
 			continue
 		}

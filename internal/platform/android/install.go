@@ -3,6 +3,7 @@ package android
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,6 +20,9 @@ type InstallRequest struct {
 	// Environment is injected only into sdkmanager subprocesses. It supports
 	// network proxies without changing the user's global environment.
 	Environment []string
+	// Output receives the live sdkmanager transcript for interactive callers.
+	// JSON callers leave it nil so stdout remains machine-readable.
+	Output io.Writer
 }
 
 type InstallResult struct {
@@ -47,7 +51,10 @@ func InstallPackages(ctx context.Context, request InstallRequest) (InstallResult
 	packages := append([]string(nil), request.Packages...)
 	sort.Strings(packages)
 	program, args = system.BatchCommand(manager, append([]string{"--sdk_root=" + request.Root, "--install"}, packages...)...)
-	result, err := system.Run(ctx, program, args, request.Environment, "", "")
+	result, err := system.RunWithOutput(ctx, program, args, request.Environment, "", "", request.Output)
+	if flusher, ok := request.Output.(interface{ Flush() }); ok {
+		flusher.Flush()
+	}
 	if err != nil {
 		return InstallResult{}, fmt.Errorf("install Android SDK packages: %w: %s", err, strings.TrimSpace(result.Output))
 	}

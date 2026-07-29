@@ -23,19 +23,49 @@ func LookPath(name string) (string, bool) {
 }
 
 func Run(ctx context.Context, program string, args []string, env []string, dir string, input string) (CommandResult, error) {
+	return RunWithOutput(ctx, program, args, env, dir, input, nil)
+}
+
+// RunWithOutput runs a command while retaining its combined output for callers
+// and, when output is provided, forwarding it to an interactive terminal.
+// Keeping the captured copy preserves actionable error messages for the CLI.
+func RunWithOutput(ctx context.Context, program string, args []string, env []string, dir string, input string, output io.Writer) (CommandResult, error) {
 	command := exec.CommandContext(ctx, program, args...)
 	command.Env = mergeEnv(env)
 	command.Dir = dir
 	command.Stdin = strings.NewReader(input)
-	var output bytes.Buffer
-	command.Stdout = &output
-	command.Stderr = &output
+	var captured bytes.Buffer
+	writer := &capturingWriter{capture: &captured, output: output}
+	command.Stdout = writer
+	command.Stderr = writer
 	err := command.Run()
-	result := CommandResult{Output: output.String()}
+	result := CommandResult{Output: captured.String()}
 	if err != nil {
 		return result, fmt.Errorf("run %s %s: %w", program, strings.Join(args, " "), err)
 	}
 	return result, nil
+}
+
+// capturingWriter keeps the saved command transcript and optional live output
+// in the same order when a child writes on both standard streams.
+type capturingWriter struct {
+	mu      sync.Mutex
+	capture *bytes.Buffer
+	output  io.Writer
+}
+
+func (w *capturingWriter) Write(data []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if _, err := w.capture.Write(data); err != nil {
+		return 0, err
+	}
+	if w.output != nil {
+		if _, err := w.output.Write(data); err != nil {
+			return 0, err
+		}
+	}
+	return len(data), nil
 }
 
 func Stream(ctx context.Context, program string, args []string, env []string, dir string, stdout, stderr io.Writer) error {

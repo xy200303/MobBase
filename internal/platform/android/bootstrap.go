@@ -18,9 +18,14 @@ import (
 
 const officialArchiveBaseURL = "https://dl.google.com/android/repository/"
 
+type DownloadProgress struct {
+	Downloaded int64
+	Total      int64
+}
+
 // BootstrapCommandLineTools installs only the official command-line tools into
 // an empty Mob-managed SDK root. It never replaces an existing installation.
-func BootstrapCommandLineTools(ctx context.Context, root, cacheDirectory string, item CatalogItem, proxyURL string) error {
+func BootstrapCommandLineTools(ctx context.Context, root, cacheDirectory string, item CatalogItem, proxyURL string, report func(DownloadProgress)) error {
 	if item.PackageID != "cmdline-tools;latest" {
 		return fmt.Errorf("invalid command-line tools catalog item %q", item.PackageID)
 	}
@@ -36,7 +41,7 @@ func BootstrapCommandLineTools(ctx context.Context, root, cacheDirectory string,
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("inspect command-line tools destination: %w", err)
 	}
-	archivePath, err := downloadArchive(ctx, cacheDirectory, item, proxyURL)
+	archivePath, err := downloadArchive(ctx, cacheDirectory, item, proxyURL, report)
 	if err != nil {
 		return err
 	}
@@ -60,7 +65,7 @@ func BootstrapCommandLineTools(ctx context.Context, root, cacheDirectory string,
 	return nil
 }
 
-func downloadArchive(ctx context.Context, cacheDirectory string, item CatalogItem, proxyURL string) (string, error) {
+func downloadArchive(ctx context.Context, cacheDirectory string, item CatalogItem, proxyURL string, report func(DownloadProgress)) (string, error) {
 	if err := os.MkdirAll(cacheDirectory, 0o755); err != nil {
 		return "", fmt.Errorf("create download cache: %w", err)
 	}
@@ -102,7 +107,13 @@ func downloadArchive(ctx context.Context, cacheDirectory string, item CatalogIte
 	}
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
-	if _, err := io.Copy(temporary, response.Body); err != nil {
+	total := response.ContentLength
+	if total <= 0 {
+		total = item.Size
+	}
+	reader := &progressReader{Reader: response.Body, total: total, report: report}
+	reader.notify()
+	if _, err := io.Copy(temporary, reader); err != nil {
 		temporary.Close()
 		return "", fmt.Errorf("save command-line tools download: %w", err)
 	}
@@ -119,6 +130,28 @@ func downloadArchive(ctx context.Context, cacheDirectory string, item CatalogIte
 		return "", fmt.Errorf("publish command-line tools download: %w", err)
 	}
 	return archivePath, nil
+}
+
+type progressReader struct {
+	io.Reader
+	downloaded int64
+	total      int64
+	report     func(DownloadProgress)
+}
+
+func (r *progressReader) Read(buffer []byte) (int, error) {
+	count, err := r.Reader.Read(buffer)
+	if count > 0 {
+		r.downloaded += int64(count)
+		r.notify()
+	}
+	return count, err
+}
+
+func (r *progressReader) notify() {
+	if r.report != nil {
+		r.report(DownloadProgress{Downloaded: r.downloaded, Total: r.total})
+	}
 }
 
 func verifySHA1(path, expected string) error {

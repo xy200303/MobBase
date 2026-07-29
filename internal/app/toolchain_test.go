@@ -24,11 +24,11 @@ func TestAndroidRequirementPackagesAndSelection(t *testing.T) {
 }
 
 func TestDefaultSystemImagePackage(t *testing.T) {
-	catalog := android.Catalog{Items: []android.CatalogItem{
+	items := []android.CatalogItem{
 		{PackageID: "system-images;android-35;default;x86_64"},
 		{PackageID: "system-images;android-35;google_apis;x86_64"},
-	}}
-	image, found := defaultSystemImagePackage(catalog, 35)
+	}
+	image, found := defaultSystemImagePackage(items, 35)
 	if !found || image != "system-images;android-35;google_apis;x86_64" {
 		t.Fatalf("image = %q, found = %t", image, found)
 	}

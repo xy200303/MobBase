@@ -51,7 +51,9 @@ VS Code 插件：可视化状态、设备与工作流入口，所有业务逻辑
 - 统一列出 Android 真机和模拟器；支持将可用设备设为默认目标。
 - 无设备时可为当前 Android 项目自动创建匹配 API 的 Mob 托管 AVD。
 - 支持 ADB USB、Wireless Debugging 配对与无线连接。
-- 使用 Android Emulator 官方窗口提供实时预览；真机可选使用 `scrcpy` 镜像。
+- 使用 Android Emulator 官方窗口提供实时预览；真机预览首次使用时自动准备 Mob 内部的镜像运行时，无需手动安装或配置 `scrcpy`。
+
+如网络受限，用户也可将完整的 Windows x64 `scrcpy` 官方压缩包解压到 `MOB_HOME/runtime/scrcpy`（默认为 `~/.mob/runtime/scrcpy`）。目录中必须包含 `scrcpy.exe` 以及同一压缩包中的 DLL、`scrcpy-server` 等全部文件；Mob 发现该目录后会直接使用它，不再下载。
 - 支持截图、录屏、项目日志和原生 Android JDWP 调试端点。
 - VS Code 插件可将 JDWP 端点交给已安装的 Java/Kotlin 调试扩展，Mob 不伪造调试器。
 
@@ -178,6 +180,12 @@ mob run
 | 获取机器可读帮助 | `mob help <command> --format json` |
 
 运行 `mob help --format markdown` 可获取当前 CLI 的完整命令契约。`--json` 输出单个结构化终态结果，`--json=events` 为长任务输出 JSON Lines 进度事件，适合 VS Code、CI 和 AI 工具调用。
+
+### 终端反馈
+
+普通终端执行安装、自动补齐 SDK 或创建模拟器时，Mob 在标准错误输出统一的阶段提示、官方下载的字节进度条，以及经过筛选的 `sdkmanager` 安装进度。交互式终端会在同一行更新下载进度；重定向到文件或 CI 日志时按阶段输出可读的进度行。Windows 的批处理命令回显和 SDK 许可证全文不会混入终端日志。
+
+`--json` 与 `--json=events` 不输出任何人类 UI 文本：前者只在标准输出产生一个最终 JSON 对象，后者只产生 JSON Lines 事件。因此 VS Code、CI 和 AI 调用方不需要解析进度条或 SDK 工具的文本输出。
 
 ## VS Code 扩展
 

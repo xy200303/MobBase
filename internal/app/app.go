@@ -58,6 +58,7 @@ type runtime struct {
 	out       io.Writer
 	err       io.Writer
 	events    *eventStream
+	terminal  *terminalProgress
 }
 
 // Run is deliberately side-effect free for list, status, doctor and help.
@@ -68,7 +69,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return writeFailure(runtime{json: jsonOutput, eventMode: eventMode, out: stdout, err: stderr, events: &eventStream{}}, "mob", err)
 	}
-	run := runtime{home: homePath, store: state.New(homePath), json: jsonOutput, eventMode: eventMode, out: stdout, err: stderr, events: &eventStream{}}
+	run := runtime{home: homePath, store: state.New(homePath), json: jsonOutput, eventMode: eventMode, out: stdout, err: stderr, events: &eventStream{}, terminal: newTerminalProgress(stderr)}
 	if err := run.execute(ctx, args); err != nil {
 		return writeFailure(run, commandName(args), err)
 	}
@@ -269,8 +270,8 @@ func (r runtime) deviceOpen(ctx context.Context, id string) error {
 	}
 	mode := "wake"
 	if device.Kind == "physical" {
-		if err := android.MirrorDevice(ctx, device.NativeID); err != nil {
-			return &codedError{Code: "MOB_TOOLCHAIN_MISSING", Message: err.Error(), Remediation: "Install scrcpy through its official distribution, then rerun mob device open."}
+		if _, err := r.startAndroidMirror(ctx, device.NativeID, "mob device open"); err != nil {
+			return err
 		}
 		mode = "mirror"
 	} else if err := android.WakeDevice(ctx, sdks, device.NativeID); err != nil {
@@ -311,8 +312,8 @@ func (r runtime) deviceMirror(ctx context.Context, id string) error {
 	if device.Kind != "physical" {
 		return &codedError{Code: "MOB_DEVICE_UNAVAILABLE", Message: "Device mirroring is intended for connected physical Android devices.", Remediation: "Use the official Emulator window for an Android virtual device."}
 	}
-	if err := android.MirrorDevice(ctx, device.NativeID); err != nil {
-		return &codedError{Code: "MOB_TOOLCHAIN_MISSING", Message: err.Error(), Remediation: "Install scrcpy through its official distribution, then rerun mob device mirror."}
+	if _, err := r.startAndroidMirror(ctx, device.NativeID, "mob device mirror"); err != nil {
+		return err
 	}
 	data := map[string]interface{}{"device": device, "client": "scrcpy"}
 	if r.json {
@@ -1004,7 +1005,7 @@ func (r runtime) sdkInstallAs(ctx context.Context, args []string, command string
 	if options.API > 0 {
 		packages = append(packages, fmt.Sprintf("platforms;android-%d", options.API))
 	}
-	catalog, err := r.validateAndroidPackages(ctx, packages, false)
+	catalog, err := r.validateAndroidPackages(ctx, packages, false, target.Path)
 	if err != nil {
 		return err
 	}
@@ -1014,7 +1015,7 @@ func (r runtime) sdkInstallAs(ctx context.Context, args []string, command string
 	if err := r.bootstrapManagedSDK(ctx, target, catalog, command); err != nil {
 		return err
 	}
-	result, err := android.InstallPackages(ctx, android.InstallRequest{Root: target.Path, Packages: packages, AcceptLicenses: true, Environment: androidProxyEnvironment(config)})
+	result, err := android.InstallPackages(ctx, android.InstallRequest{Root: target.Path, Packages: packages, AcceptLicenses: true, Environment: androidProxyEnvironment(config), Output: r.sdkManagerOutput()})
 	if err != nil {
 		if strings.Contains(err.Error(), "command-line tools were not found") {
 			return &codedError{Code: "MOB_TOOLCHAIN_MISSING", Message: err.Error(), Remediation: "Install or import Android command-line tools first. Mob-managed command-line-tools bootstrap will be available through the verified catalog installer."}
@@ -1181,7 +1182,7 @@ func (r runtime) ndkInstall(ctx context.Context, args []string) error {
 		return &codedError{Code: "MOB_LICENSE_REQUIRED", Message: "Android SDK licenses must be accepted before installation.", Remediation: "Review the Android SDK license, then repeat with --accept-licenses."}
 	}
 	packageID := "ndk;" + options.Version
-	catalog, err := r.validateAndroidPackages(ctx, []string{packageID}, true)
+	catalog, err := r.validateAndroidPackages(ctx, []string{packageID}, true, target.Path)
 	if err != nil {
 		return err
 	}
@@ -1191,7 +1192,7 @@ func (r runtime) ndkInstall(ctx context.Context, args []string) error {
 	if err := r.bootstrapManagedSDK(ctx, target, catalog, "mob android ndk install"); err != nil {
 		return err
 	}
-	result, err := android.InstallPackages(ctx, android.InstallRequest{Root: target.Path, Packages: []string{packageID}, AcceptLicenses: true, Environment: androidProxyEnvironment(config)})
+	result, err := android.InstallPackages(ctx, android.InstallRequest{Root: target.Path, Packages: []string{packageID}, AcceptLicenses: true, Environment: androidProxyEnvironment(config), Output: r.sdkManagerOutput()})
 	if err != nil {
 		if strings.Contains(err.Error(), "command-line tools were not found") {
 			return &codedError{Code: "MOB_TOOLCHAIN_MISSING", Message: err.Error(), Remediation: "Install or add Android command-line tools first."}
@@ -1267,7 +1268,7 @@ func (r runtime) ndkRemove(args []string) error {
 	return nil
 }
 
-func (r runtime) validateAndroidPackages(ctx context.Context, packages []string, ndkOnly bool) (android.Catalog, error) {
+func (r runtime) validateAndroidPackages(ctx context.Context, packages []string, ndkOnly bool, sdkRoot string) (android.Catalog, error) {
 	catalog, err := android.LoadCatalog(ctx, android.CatalogCachePath(r.home), false)
 	if err != nil {
 		return android.Catalog{}, &codedError{Code: "MOB_CATALOG_UNAVAILABLE", Message: err.Error(), Remediation: "Run mob android sdk available --refresh after restoring access to the Android official repository."}
@@ -1278,6 +1279,12 @@ func (r runtime) validateAndroidPackages(ctx context.Context, packages []string,
 	}
 	for _, packageID := range packages {
 		if !android.ContainsPackage(items, packageID) {
+			if !ndkOnly && strings.HasPrefix(packageID, "system-images;") {
+				available, availableErr := android.HasAvailableSystemImage(ctx, sdkRoot, packageID)
+				if availableErr == nil && available {
+					continue
+				}
+			}
 			return android.Catalog{}, &codedError{Code: "MOB_PACKAGE_NOT_AVAILABLE", Message: "Android package " + packageID + " is not in the current catalog.", Remediation: "Run mob android sdk available --refresh and choose a package ID returned by the catalog."}
 		}
 	}
@@ -1303,7 +1310,7 @@ func (r runtime) bootstrapManagedSDK(ctx context.Context, target android.SDK, ca
 	if err != nil {
 		return err
 	}
-	if err := android.BootstrapCommandLineTools(ctx, target.Path, cacheDirectory, item, config.Android.ProxyURL); err != nil {
+	if err := android.BootstrapCommandLineTools(ctx, target.Path, cacheDirectory, item, config.Android.ProxyURL, r.terminal.download("Downloading Android command-line tools")); err != nil {
 		return &codedError{Code: "MOB_COMMAND_FAILED", Message: err.Error(), Remediation: "Check Android repository access and retry; existing SDK installations are not modified."}
 	}
 	return nil
@@ -2424,7 +2431,7 @@ func helpData(path string) (helpResponse, bool) {
 		base.Errors = []string{"MOB_TOOLCHAIN_MISSING", "MOB_COMMAND_FAILED"}
 	case "mob android emulator image available":
 		base.Usage = "mob android emulator image available [--api <level>] [--refresh] [--json]"
-		base.Description = "List installable Android Emulator system images from the official repository catalog."
+		base.Description = "List installable Android Emulator system images from official sdkmanager metadata when an SDK is available, otherwise from the Android repository catalog."
 		base.Examples = []string{"mob android emulator image available --api 35 --json"}
 		base.Related = []string{"mob android emulator image install", "mob android emulator create"}
 		base.Errors = []string{"MOB_CATALOG_UNAVAILABLE"}
@@ -2471,15 +2478,15 @@ func helpData(path string) (helpResponse, bool) {
 		base.Errors = []string{"MOB_INVALID_ARGUMENT", "MOB_DEVICE_UNAVAILABLE", "MOB_PLATFORM_NOT_SUPPORTED", "MOB_TOOLCHAIN_MISSING"}
 	case "mob device open":
 		base.Usage = "mob device open <android:native-id> [--json]"
-		base.Description = "Wake a ready Android emulator or open a physical Android device through scrcpy."
-		base.SideEffects = "sends an ADB wake event or starts an external device mirror process"
+		base.Description = "Wake a ready Android emulator or open a physical Android device in Mob's automatically prepared preview window."
+		base.SideEffects = "sends an ADB wake event or downloads Mob's internal preview runtime and starts a mirror process"
 		base.Examples = []string{"mob device open android:emulator-5554", "mob device open android:R58N123456A"}
 		base.Related = []string{"mob device list", "mob device mirror", "mob android emulator start"}
 		base.Errors = []string{"MOB_INVALID_ARGUMENT", "MOB_DEVICE_UNAVAILABLE", "MOB_TOOLCHAIN_MISSING", "MOB_COMMAND_FAILED"}
 	case "mob device mirror":
 		base.Usage = "mob device mirror <android:native-id> [--json]"
-		base.Description = "Open a low-latency mirror window for a ready physical Android device through scrcpy."
-		base.SideEffects = "starts an external device mirror process"
+		base.Description = "Open a low-latency mirror window for a ready physical Android device; Mob automatically prepares its internal preview runtime when needed."
+		base.SideEffects = "may download Mob's internal preview runtime and starts a mirror process"
 		base.Examples = []string{"mob device mirror android:R58N123456A"}
 		base.Related = []string{"mob device list", "mob run"}
 		base.Errors = []string{"MOB_INVALID_ARGUMENT", "MOB_DEVICE_UNAVAILABLE", "MOB_TOOLCHAIN_MISSING"}
@@ -2518,7 +2525,11 @@ func (r runtime) result(command string, data interface{}) error {
 }
 
 func (r runtime) emit(kind, command string, ok bool, data interface{}, coded *codedError) error {
-	if !r.json || (!r.eventMode && kind != "completed" && kind != "error") {
+	if !r.json {
+		r.terminal.event(kind, command, data)
+		return nil
+	}
+	if !r.eventMode && kind != "completed" && kind != "error" {
 		return nil
 	}
 	r.events.mu.Lock()
@@ -2533,6 +2544,20 @@ func (r runtime) emit(kind, command string, ok bool, data interface{}, coded *co
 		Data:          data,
 		Error:         coded,
 	})
+}
+
+func (r runtime) interactiveOutput() io.Writer {
+	if r.json {
+		return nil
+	}
+	return r.err
+}
+
+func (r runtime) sdkManagerOutput() io.Writer {
+	if r.json {
+		return nil
+	}
+	return newSDKManagerOutput(r.err)
 }
 
 func takeJSON(args []string) ([]string, bool) {

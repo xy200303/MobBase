@@ -1,6 +1,7 @@
 package system
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,17 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestCapturingWriterForwardsAndRetainsOutput(t *testing.T) {
+	var captured, live bytes.Buffer
+	writer := &capturingWriter{capture: &captured, output: &live}
+	if _, err := writer.Write([]byte("Android SDK output")); err != nil {
+		t.Fatal(err)
+	}
+	if captured.String() != "Android SDK output" || live.String() != "Android SDK output" {
+		t.Fatalf("capture = %q, live = %q", captured.String(), live.String())
+	}
+}
 
 func TestReadLinesDeliversCompleteLines(t *testing.T) {
 	var received []string

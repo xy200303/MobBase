@@ -519,6 +519,14 @@ func MirrorDevice(ctx context.Context, nativeID string) error {
 	if !found {
 		return fmt.Errorf("scrcpy was not found on PATH")
 	}
+	return MirrorDeviceWithClient(ctx, nativeID, client)
+}
+
+// MirrorDeviceWithClient launches the specified verified mirror runtime.
+func MirrorDeviceWithClient(ctx context.Context, nativeID, client string) error {
+	if strings.TrimSpace(client) == "" {
+		return fmt.Errorf("scrcpy client path is required")
+	}
 	if err := system.Start(ctx, client, []string{"--serial", nativeID}, nil, ""); err != nil {
 		return fmt.Errorf("start Android device mirror: %w", err)
 	}
