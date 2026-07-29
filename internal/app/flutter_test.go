@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	gort "runtime"
 	"testing"
 
 	"github.com/xy200303/MobBase/internal/state"
@@ -56,10 +57,11 @@ func TestFlutterRunnerPrefersManagedSDK(t *testing.T) {
 	if err := state.New(home).Save(config); err != nil {
 		t.Fatal(err)
 	}
+	executable := managedFlutterExecutable(path)
 	runner, err := flutterRunnerWithLookup(t.TempDir(), func(candidate string) (string, bool) {
-		return candidate, candidate == filepath.Join(path, "bin", "flutter.bat")
+		return candidate, candidate == executable
 	})
-	if err != nil || runner.Program != filepath.Join(path, "bin", "flutter.bat") {
+	if err != nil || runner.Program != executable {
 		t.Fatalf("runner: %#v %v", runner, err)
 	}
 }
@@ -67,7 +69,7 @@ func TestFlutterRunnerPrefersManagedSDK(t *testing.T) {
 func TestFlutterUseSelectsInstalledSDK(t *testing.T) {
 	home := t.TempDir()
 	path := filepath.Join(home, "flutter")
-	executable := filepath.Join(path, "bin", "flutter.bat")
+	executable := managedFlutterExecutable(path)
 	if err := os.MkdirAll(filepath.Dir(executable), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +89,14 @@ func TestFlutterUseSelectsInstalledSDK(t *testing.T) {
 	if err != nil || config.Flutter.CurrentSDK != "3.29.0" {
 		t.Fatalf("current: %#v %v", config.Flutter, err)
 	}
+}
+
+func managedFlutterExecutable(path string) string {
+	executable := filepath.Join(path, "bin", "flutter")
+	if gort.GOOS == "windows" {
+		executable += ".bat"
+	}
+	return executable
 }
 
 func TestFlutterRemoveDeletesManagedSDK(t *testing.T) {
