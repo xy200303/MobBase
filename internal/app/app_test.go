@@ -43,9 +43,16 @@ func TestSDKImportListAndUseJSONContract(t *testing.T) {
 	}
 	event := assertEvent(t, stdout.Bytes(), true, "mob android sdk list")
 	data := event["data"].(map[string]interface{})
-	if len(data["sdks"].([]interface{})) != 1 {
+	for _, rawSDK := range data["sdks"].([]interface{}) {
+		sdk := rawSDK.(map[string]interface{})
+		if sdk["name"] == "shared" && sdk["current"] == true {
+			return
+		}
+	}
+	if len(data["sdks"].([]interface{})) == 0 {
 		t.Fatalf("unexpected SDK response: %s", stdout.String())
 	}
+	t.Fatalf("imported SDK is missing from response: %s", stdout.String())
 }
 
 func TestSDKAddUsesPositionalNameAndCompletedEvent(t *testing.T) {
