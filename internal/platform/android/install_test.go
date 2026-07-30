@@ -30,3 +30,16 @@ func TestInstallPackagesRequiresLicenseAcceptance(t *testing.T) {
 		}
 	}
 }
+
+func TestSDKManagerDiagnosticRemovesWindowsBatchEcho(t *testing.T) {
+	raw := "C:\\Android\\cmdline-tools\\latest\\bin>if \"Windows_NT\"==\"Windows_NT\" setlocal\r\n" +
+		"set DIRNAME=C:\\Android\\cmdline-tools\\latest\\bin\\\r\n" +
+		"[=======================================] 100% Installing platform-tools\r\n" +
+		"Warning: Package path is invalid\r\n"
+
+	got := sdkManagerDiagnostic(raw)
+	want := "[=======================================] 100% Installing platform-tools\nWarning: Package path is invalid"
+	if got != want {
+		t.Fatalf("sdkManagerDiagnostic() = %q, want %q", got, want)
+	}
+}

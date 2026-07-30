@@ -28,7 +28,10 @@ type InstallRequest struct {
 type InstallResult struct {
 	SDKManager string   `json:"sdkManager"`
 	Packages   []string `json:"packages"`
-	Output     string   `json:"output,omitempty"`
+	// Output is reserved for concise diagnostic output. Successful installs
+	// stream their transcript to interactive callers and intentionally leave it
+	// empty so JSON consumers do not receive shell-specific batch-file echoes.
+	Output string `json:"output,omitempty"`
 }
 
 // InstallPackages delegates package installation to the Android SDK's official
@@ -46,7 +49,7 @@ func InstallPackages(ctx context.Context, request InstallRequest) (InstallResult
 	}
 	program, args := system.BatchCommand(manager, "--sdk_root="+request.Root, "--licenses")
 	if result, err := system.Run(ctx, program, args, request.Environment, "", strings.Repeat("y\n", 64)); err != nil {
-		return InstallResult{}, fmt.Errorf("accept Android SDK licenses: %w: %s", err, strings.TrimSpace(result.Output))
+		return InstallResult{}, fmt.Errorf("accept Android SDK licenses: %w: %s", err, sdkManagerDiagnostic(result.Output))
 	}
 	packages := append([]string(nil), request.Packages...)
 	sort.Strings(packages)
@@ -56,9 +59,37 @@ func InstallPackages(ctx context.Context, request InstallRequest) (InstallResult
 		flusher.Flush()
 	}
 	if err != nil {
-		return InstallResult{}, fmt.Errorf("install Android SDK packages: %w: %s", err, strings.TrimSpace(result.Output))
+		return InstallResult{}, fmt.Errorf("install Android SDK packages: %w: %s", err, sdkManagerDiagnostic(result.Output))
 	}
-	return InstallResult{SDKManager: manager, Packages: packages, Output: strings.TrimSpace(result.Output)}, nil
+	return InstallResult{SDKManager: manager, Packages: packages}, nil
+}
+
+// sdkManagerDiagnostic removes cmd.exe's echo of sdkmanager.bat internals while
+// retaining the SDK manager's actual diagnostic messages.
+func sdkManagerDiagnostic(output string) string {
+	lines := strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n")
+	meaningful := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || isWindowsBatchEcho(line) {
+			continue
+		}
+		meaningful = append(meaningful, line)
+	}
+	return strings.Join(meaningful, "\n")
+}
+
+func isWindowsBatchEcho(line string) bool {
+	lower := strings.ToLower(line)
+	if index := strings.Index(lower, ">if \"windows_nt\""); index >= 0 {
+		return true
+	}
+	for _, prefix := range []string{"set dirname=", "set app_base_name=", "set app_home=", "if defined java_home", "if not defined java_exe", "rem ", "@rem "} {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // SDKManager finds a command-line-tools installation without depending on a

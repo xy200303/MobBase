@@ -1,6 +1,10 @@
 package android
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+	"time"
+)
 
 func TestParseCatalogSelectsHostArchiveAndSDKItems(t *testing.T) {
 	data := []byte(`<?xml version="1.0"?>
@@ -34,5 +38,29 @@ func TestSystemImageItemsFiltersAPI(t *testing.T) {
 	items := catalog.SystemImageItems(35)
 	if len(items) != 1 || items[0].PackageID != "system-images;android-35;google_apis;x86_64" {
 		t.Fatalf("items: %#v", items)
+	}
+}
+
+func TestMergeCatalogsIncludesSystemImageRepository(t *testing.T) {
+	refreshed := time.Date(2026, 7, 30, 4, 0, 0, 0, time.UTC)
+	merged := mergeCatalogs(
+		Catalog{Source: OfficialRepositoryURL, Cached: true, Items: []CatalogItem{{PackageID: "platform-tools"}}},
+		Catalog{Source: OfficialSystemImageURL, RefreshedAt: refreshed, Cached: false, Items: []CatalogItem{{PackageID: "system-images;android-35;google_apis;x86_64"}}},
+	)
+	if got := merged.SystemImageItems(0); len(got) != 1 || got[0].PackageID != "system-images;android-35;google_apis;x86_64" {
+		t.Fatalf("system image items = %#v", got)
+	}
+	if merged.Cached || !merged.RefreshedAt.Equal(refreshed) {
+		t.Fatalf("metadata = %#v", merged)
+	}
+	if merged.Source != OfficialRepositoryURL+"; "+OfficialSystemImageURL {
+		t.Fatalf("source = %q", merged.Source)
+	}
+}
+
+func TestSystemImageCatalogCachePath(t *testing.T) {
+	path := systemImageCatalogCachePath(filepath.Join("cache", "catalogs", "android-repository.xml"))
+	if path != filepath.Join("cache", "catalogs", "android-system-images.xml") {
+		t.Fatalf("cache path = %q", path)
 	}
 }

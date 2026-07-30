@@ -14,7 +14,10 @@ import (
 	"time"
 )
 
-const OfficialRepositoryURL = "https://dl.google.com/android/repository/repository2-1.xml"
+const (
+	OfficialRepositoryURL  = "https://dl.google.com/android/repository/repository2-1.xml"
+	OfficialSystemImageURL = "https://dl.google.com/android/repository/sys-img/android/sys-img2-1.xml"
+)
 
 type CatalogItem struct {
 	PackageID         string `json:"packageId"`
@@ -69,9 +72,21 @@ type completeXML struct {
 // LoadCatalog reuses a local cache unless refresh is requested. If no cache is
 // available it loads the official Android repository over HTTPS.
 func LoadCatalog(ctx context.Context, cachePath string, refresh bool) (Catalog, error) {
+	sdkCatalog, err := loadCatalogSource(ctx, cachePath, OfficialRepositoryURL, refresh)
+	if err != nil {
+		return Catalog{}, err
+	}
+	imageCatalog, err := loadCatalogSource(ctx, systemImageCatalogCachePath(cachePath), OfficialSystemImageURL, refresh)
+	if err != nil {
+		return Catalog{}, err
+	}
+	return mergeCatalogs(sdkCatalog, imageCatalog), nil
+}
+
+func loadCatalogSource(ctx context.Context, cachePath, source string, refresh bool) (Catalog, error) {
 	if !refresh {
 		if data, err := os.ReadFile(cachePath); err == nil {
-			catalog, parseErr := ParseCatalog(data, OfficialRepositoryURL)
+			catalog, parseErr := ParseCatalog(data, source)
 			if parseErr == nil {
 				if info, statErr := os.Stat(cachePath); statErr == nil {
 					catalog.RefreshedAt = info.ModTime().UTC()
@@ -81,23 +96,23 @@ func LoadCatalog(ctx context.Context, cachePath string, refresh bool) (Catalog, 
 			}
 		}
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, OfficialRepositoryURL, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
 	if err != nil {
 		return Catalog{}, fmt.Errorf("create Android repository request: %w", err)
 	}
 	response, err := (&http.Client{Timeout: 45 * time.Second}).Do(request)
 	if err != nil {
-		return Catalog{}, fmt.Errorf("fetch Android repository: %w", err)
+		return Catalog{}, fmt.Errorf("fetch Android repository %s: %w", source, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return Catalog{}, fmt.Errorf("fetch Android repository: server returned %s", response.Status)
+		return Catalog{}, fmt.Errorf("fetch Android repository %s: server returned %s", source, response.Status)
 	}
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
-		return Catalog{}, fmt.Errorf("read Android repository: %w", err)
+		return Catalog{}, fmt.Errorf("read Android repository %s: %w", source, err)
 	}
-	catalog, err := ParseCatalog(data, OfficialRepositoryURL)
+	catalog, err := ParseCatalog(data, source)
 	if err != nil {
 		return Catalog{}, err
 	}
@@ -110,6 +125,33 @@ func LoadCatalog(ctx context.Context, cachePath string, refresh bool) (Catalog, 
 	catalog.RefreshedAt = time.Now().UTC()
 	catalog.Cached = false
 	return catalog, nil
+}
+
+func mergeCatalogs(catalogs ...Catalog) Catalog {
+	merged := Catalog{Items: make([]CatalogItem, 0)}
+	for _, catalog := range catalogs {
+		merged.Items = append(merged.Items, catalog.Items...)
+		if catalog.RefreshedAt.After(merged.RefreshedAt) {
+			merged.RefreshedAt = catalog.RefreshedAt
+		}
+		if merged.Source == "" {
+			merged.Source = catalog.Source
+		} else if catalog.Source != "" && !strings.Contains(merged.Source, catalog.Source) {
+			merged.Source += "; " + catalog.Source
+		}
+		merged.Cached = merged.Cached || catalog.Cached
+	}
+	merged.Cached = len(catalogs) > 0
+	for _, catalog := range catalogs {
+		merged.Cached = merged.Cached && catalog.Cached
+	}
+	sort.Slice(merged.Items, func(i, j int) bool {
+		if merged.Items[i].PackageID == merged.Items[j].PackageID {
+			return merged.Items[i].Version > merged.Items[j].Version
+		}
+		return merged.Items[i].PackageID < merged.Items[j].PackageID
+	})
+	return merged
 }
 
 func ParseCatalog(data []byte, source string) (Catalog, error) {
@@ -236,4 +278,8 @@ func checksumAlgorithm(value string) string {
 
 func CatalogCachePath(home string) string {
 	return filepath.Join(home, "cache", "catalogs", "android-repository.xml")
+}
+
+func systemImageCatalogCachePath(cachePath string) string {
+	return filepath.Join(filepath.Dir(cachePath), "android-system-images.xml")
 }
