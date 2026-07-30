@@ -238,6 +238,8 @@ func (r runtime) device(ctx context.Context, args []string) error {
 		return r.deviceMirror(ctx, args[1])
 	case "screenshot":
 		return r.deviceScreenshot(ctx, args[1:])
+	case "ui-tree":
+		return r.deviceUITree(ctx, args[1:])
 	case "record":
 		return r.deviceRecord(ctx, args[1:])
 	case "forward":
@@ -368,21 +370,20 @@ func (r runtime) deviceMirror(ctx context.Context, id string) error {
 }
 
 func (r runtime) deviceScreenshot(ctx context.Context, args []string) error {
-	if len(args) < 1 || len(args) > 3 || !strings.HasPrefix(args[0], "android:") {
-		return &codedError{Code: "MOB_INVALID_ARGUMENT", Message: "Use mob device screenshot android:<native-id> [--output <path>]."}
-	}
-	output := ""
-	if len(args) == 3 && args[1] == "--output" && strings.TrimSpace(args[2]) != "" {
-		output = args[2]
-	} else if len(args) != 1 {
-		return invalidCommand("mob device screenshot " + strings.Join(args, " "))
-	}
-	if output == "" {
-		output = "mob-" + strings.ReplaceAll(strings.TrimPrefix(args[0], "android:"), ":", "-") + ".png"
-	}
-	output, err := filepath.Abs(output)
-	if err != nil {
-		return err
+	deviceID, output := "", ""
+	for len(args) > 0 {
+		switch args[0] {
+		case "--output", "--out":
+			if len(args) < 2 || strings.TrimSpace(args[1]) == "" {
+				return &codedError{Code: "MOB_INVALID_ARGUMENT", Message: args[0] + " requires a PNG path."}
+			}
+			output, args = args[1], args[2:]
+		default:
+			if deviceID != "" || !strings.HasPrefix(args[0], "android:") {
+				return &codedError{Code: "MOB_INVALID_ARGUMENT", Message: "Use mob device screenshot [android:<native-id>] [--output|--out <path>]."}
+			}
+			deviceID, args = args[0], args[1:]
+		}
 	}
 	config, err := r.store.Load()
 	if err != nil {
@@ -396,7 +397,14 @@ func (r runtime) deviceScreenshot(ctx context.Context, args []string) error {
 	if err != nil {
 		return androidCommandError(err, "Ensure Android platform-tools is installed.")
 	}
-	device, err := findReadyAndroidDevice(devices, args[0], true)
+	device, err := selectAndroidRunDevice(devices, deviceID, config.Device.DefaultID)
+	if err != nil {
+		return err
+	}
+	if output == "" {
+		output = "mob-" + strings.ReplaceAll(device.NativeID, ":", "-") + ".png"
+	}
+	output, err = filepath.Abs(output)
 	if err != nil {
 		return err
 	}
@@ -2129,7 +2137,7 @@ func helpData(path string) (helpResponse, bool) {
 		base.Examples = []string{"mob android device pair 192.168.1.20:37123 --code 123456", "mob android device connect 192.168.1.20:5555"}
 		base.Related = []string{"mob device list"}
 	case "mob device":
-		base.Usage = "mob device <list|use|open|mirror|screenshot|record|forward> [--json]"
+		base.Usage = "mob device <list|use|open|mirror|screenshot|ui-tree|record|forward> [--json]"
 		base.Description = "List and operate on connected Android emulators and physical devices."
 		base.Platforms = []string{"android"}
 		base.Examples = []string{"mob device list", "mob device use android:emulator-5554"}
@@ -2320,11 +2328,17 @@ func helpData(path string) (helpResponse, bool) {
 		base.Related = []string{"mob home show", "mob status"}
 		base.Errors = []string{"MOB_INVALID_COMMAND", "MOB_INVALID_ARGUMENT", "MOB_COMMAND_FAILED"}
 	case "mob device screenshot":
-		base.Usage = "mob device screenshot android:<native-id> [--output <path>] [--json]"
+		base.Usage = "mob device screenshot [android:<native-id>] [--output|--out <path>] [--json]"
 		base.Description = "Capture a PNG screenshot from a ready Android device through its selected SDK's ADB."
 		base.SideEffects = "writes a PNG image file"
-		base.Examples = []string{"mob device screenshot android:emulator-5554", "mob device screenshot android:R58N123456A --output artifacts/phone.png"}
+		base.Examples = []string{"mob device screenshot", "mob device screenshot android:R58N123456A --out artifacts/phone.png"}
 		base.Related = []string{"mob device list", "mob device mirror"}
+		base.Errors = []string{"MOB_INVALID_ARGUMENT", "MOB_DEVICE_UNAVAILABLE", "MOB_TOOLCHAIN_MISSING", "MOB_COMMAND_FAILED"}
+	case "mob device ui-tree":
+		base.Usage = "mob device ui-tree [--device android:<native-id>] [--json]"
+		base.Description = "Return the current Android UI Automator hierarchy as structured JSON without exposing Android temporary paths to the calling shell."
+		base.Examples = []string{"mob device ui-tree --json", "mob device ui-tree --device android:emulator-5554 --json"}
+		base.Related = []string{"mob device screenshot", "mob logs"}
 		base.Errors = []string{"MOB_INVALID_ARGUMENT", "MOB_DEVICE_UNAVAILABLE", "MOB_TOOLCHAIN_MISSING", "MOB_COMMAND_FAILED"}
 	case "mob device record":
 		base.Usage = "mob device record android:<native-id> [--output <path>] [--seconds <1-180>] [--json]"

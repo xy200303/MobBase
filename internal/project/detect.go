@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -194,7 +195,27 @@ func nativeTargets(root string) []string {
 }
 
 func hasSettingsGradle(root string) bool {
-	return fileExists(root, "settings.gradle") || fileExists(root, "settings.gradle.kts")
+	return len(settingsScriptNames(root)) > 0
+}
+
+// settingsScriptNames accepts Gradle's conventional settings files as well as
+// versioned settings variants used by multi-module builds such as Kuikly.
+func settingsScriptNames(root string) []string {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, 2)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "settings.") {
+			continue
+		}
+		if strings.HasSuffix(entry.Name(), ".gradle") || strings.HasSuffix(entry.Name(), ".gradle.kts") {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 func fileExists(root, name string) bool {
 	info, err := os.Stat(filepath.Join(root, name))
@@ -207,7 +228,7 @@ func hasDirectory(root, name string) bool {
 
 func readBuildScripts(root string) (string, error) {
 	var content strings.Builder
-	for _, name := range []string{"build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"} {
+	for _, name := range append([]string{"build.gradle", "build.gradle.kts"}, settingsScriptNames(root)...) {
 		if err := appendBuildScript(&content, filepath.Join(root, name)); err != nil {
 			return "", err
 		}
@@ -249,7 +270,7 @@ var (
 // are intentionally not guessed by source inspection.
 func includedGradleModules(root string) ([]string, error) {
 	var settings strings.Builder
-	for _, name := range []string{"settings.gradle", "settings.gradle.kts"} {
+	for _, name := range settingsScriptNames(root) {
 		if err := appendBuildScript(&settings, filepath.Join(root, name)); err != nil {
 			return nil, err
 		}

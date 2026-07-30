@@ -289,6 +289,20 @@ func ScreenshotDevice(ctx context.Context, sdks []SDK, nativeID, output string) 
 	return nil
 }
 
+// UIHierarchyXML returns the current UI Automator hierarchy without writing a
+// host-visible temporary file on the Android device.
+func UIHierarchyXML(ctx context.Context, sdks []SDK, nativeID string) ([]byte, error) {
+	adb, ok := findADB(sdks)
+	if !ok {
+		return nil, fmt.Errorf("Android Debug Bridge was not found")
+	}
+	result, err := system.Run(ctx, adb, []string{"-s", nativeID, "exec-out", "sh", "-c", "uiautomator dump /sdcard/mob-ui.xml >/dev/null && { cat /sdcard/mob-ui.xml; rm -f /sdcard/mob-ui.xml; }"}, nil, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("dump Android UI hierarchy: %w: %s", err, strings.TrimSpace(result.Output))
+	}
+	return []byte(result.Output), nil
+}
+
 func RecordDevice(ctx context.Context, sdks []SDK, nativeID, output string, seconds int) error {
 	adb, ok := findADB(sdks)
 	if !ok {

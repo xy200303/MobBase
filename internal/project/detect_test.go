@@ -83,7 +83,7 @@ func TestDetectKotlinMultiplatformTargetsFromGroovyIncludedModule(t *testing.T) 
 
 func TestDetectKuiklyProjectWithIncludedAndroidApp(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "settings.gradle.kts"), "include(\":shared\", \":androidApp\")")
+	writeFile(t, filepath.Join(root, "settings.2.1.21.gradle.kts"), "include(\":shared\", \":androidApp\")")
 	writeFile(t, filepath.Join(root, "build.gradle.kts"), "plugins {}")
 	writeFile(t, filepath.Join(root, "shared", "build.gradle.kts"), "plugins { id(\"com.tencent.kuikly-open.kuikly\") }")
 	writeFile(t, filepath.Join(root, "androidApp", "build.gradle.kts"), "plugins { id(\"com.android.application\") }")
