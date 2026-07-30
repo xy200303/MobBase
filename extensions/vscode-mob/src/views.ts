@@ -210,7 +210,7 @@ export class DeviceTreeItem extends vscode.TreeItem {
     this.tooltip = `${device.id}\n${this.description}`;
     this.contextValue = device.kind === "emulator" ? "mob.emulator" : "mob.device";
     this.iconPath = new vscode.ThemeIcon(device.kind === "emulator" ? "vm" : "device-mobile", device.state === "ready" ? new vscode.ThemeColor("testing.iconPassed") : new vscode.ThemeColor("testing.iconFailed"));
-    this.command = { command: "mob.openDevice", title: "Open Device", arguments: [this] };
+    this.command = { command: "mob.openDevice", title: "Open Device Preview", arguments: [this] };
   }
 }
 

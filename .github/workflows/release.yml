@@ -32,11 +32,29 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extensions/vscode-mob/package-lock.json
+
       - name: Verify source
         run: |
           go test ./... -count=1 -timeout 120s
           go vet ./...
           bash -n scripts/install.sh
+
+      - name: Build VS Code extension
+        working-directory: extensions/vscode-mob
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          test "v$(node -p \"require('./package.json').version\")" = "$RELEASE_TAG"
+          mkdir -p ../../dist
+          npm run package -- --out "../../dist/mob-vscode-${RELEASE_TAG}.vsix"
 
       - name: Build release artifacts
         shell: bash

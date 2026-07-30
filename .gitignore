@@ -1,3 +1,4 @@
 # Runtime artifacts downloaded or created by Mob during local testing.
 /internal/app/cache/
 /internal/app/toolchains/
+/extensions/vscode-mob/.vscode-test/

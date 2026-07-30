@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { ActiveMobProcess, MobClient, MobCommandError, MobEvent, workspaceDirectory } from "./mobClient";
+import { captureDeviceScreenshot, inspectDeviceUI, selectReadyAndroidDevice } from "./deviceTools";
 import { createAndroidEmulator, startAndroidEmulator, stopAndroidEmulator } from "./emulators";
 import { selectAndInstallToolchain } from "./install";
 import { MobTaskProvider } from "./tasks";
@@ -62,6 +63,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("mob.stopDebug", () => stopDebug()),
     vscode.commands.registerCommand("mob.selectDevice", (item?: DeviceTreeItem) => selectDevice(client, devices, status, item?.device)),
     vscode.commands.registerCommand("mob.openDevice", (item?: DeviceTreeItem) => openDevice(client, item?.device)),
+    vscode.commands.registerCommand("mob.captureDeviceScreenshot", (item?: DeviceTreeItem) => captureDeviceScreenshot(client, item)),
+    vscode.commands.registerCommand("mob.inspectDeviceUI", (item?: DeviceTreeItem) => inspectDeviceUI(client, item)),
     vscode.commands.registerCommand("mob.connectDevice", () => connectDevice(client, devices)),
     vscode.commands.registerCommand("mob.pairDevice", () => pairDevice(client, devices)),
     vscode.commands.registerCommand("mob.createAndroidEmulator", () => createAndroidEmulator(client, output, () => devices.refresh())),
@@ -277,11 +280,12 @@ async function pairDevice(client: MobClient, devices: DevicesTreeDataProvider): 
 }
 
 async function openDevice(client: MobClient, device?: MobDevice): Promise<void> {
-  if (!device || device.id === "none") {
+  const selected = await selectReadyAndroidDevice(client, device);
+  if (!selected) {
     return;
   }
   try {
-    await client.query(["device", "open", device.id]);
+    await client.query(["device", "open", selected.id]);
   } catch (error) {
     showError(error);
   }

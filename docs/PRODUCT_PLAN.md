@@ -575,7 +575,37 @@ mob debug
 3. 每个项目只在自己的子进程使用匹配 JDK/SDK，不改写另一个项目的执行环境。
 4. 用户不需要在两个项目之间反复切换 SDK，也不需要手工维护多套环境变量。
 
-## 12. 实施顺序
+## 12. VS Code 插件与设备预览计划
+
+VS Code 插件是 Mob CLI 的图形入口，不应自行管理 ADB、SDK 或 scrcpy。所有设备连接、工具安装、权限校验和进程生命周期仍由 CLI 负责；插件只消费稳定 JSON 事件，并呈现结果。
+
+### 第一阶段：当前 Android 交付
+
+- 工具链、诊断、设备、模拟器、项目创建、build/run/test/release/logs 和调试入口。
+- “Open Device Preview” 调用 `mob device open`：Android 模拟器使用官方 Emulator 窗口，真机使用 Mob 管理的低延迟预览窗口。
+- “Capture Device Screenshot” 调用 `mob device screenshot` 后在 VS Code 中打开 PNG。
+- “Inspect Device UI” 调用 `mob device ui-tree --json`，在只读 Webview 中展示 UI Automator 层级；临时设备文件不暴露给插件。
+- Task Provider 只声明当前已交付的 Android 工作流，不将 iOS/HarmonyOS 的预留命名空间伪装成可用功能。
+
+### 第二阶段：CLI 本地预览服务
+
+内嵌实时预览不能用 ADB 截图轮询实现。CLI 需要新增受控的 `mob device preview serve <android:id> --json=events` 服务，职责包括：
+
+- 在 `127.0.0.1` 上分配短生命周期端口和随机会话令牌；不得监听局域网地址，也不得把令牌写入日志或持久化配置。
+- 使用 Android 设备的视频流能力输出 H.264/AVC 帧，并在设备断开、插件关闭或会话超时后停止对应进程和端口。
+- 仅接受已认证会话的触控、滚动、文本、返回、主页、截图和 UI 刷新请求；CLI 再通过 ADB/scrcpy 协议执行。
+- 以 JSON 事件返回服务地址、会话 ID、视频参数、设备状态和可机器处理的错误码。协议必须独立于 VS Code，供终端、自动化和未来 IDE 复用。
+
+### 第三阶段：VS Code 内嵌预览
+
+插件新增 `Mob Preview` Webview：通过 CLI 返回的 loopback 会话连接视频流，用 WebCodecs 解码，按设备实际分辨率渲染，并将鼠标、触控和键盘事件转换为 CLI 协议消息。Webview 不直连 ADB、不保存令牌，也不自行下载 scrcpy。
+
+- 真机和 Android 模拟器优先共用同一协议；设备重连时显示可恢复状态，不自动重试未经授权的新设备。
+- 预览工具栏提供暂停、刷新 UI 层级、截图、旋转和“在外部窗口打开”；所有按钮的可用性由 CLI 返回的 capability 决定。
+- iOS Simulator 与 HarmonyOS 只有在其官方工具提供等价、稳定的流和输入能力后接入；在此之前保持官方窗口或截图模式，不承诺内嵌控制。
+- 完成标准：Extension Host 自动化测试覆盖会话创建、断线、令牌拒绝、输入坐标转换和资源清理；真实 Android 真机与模拟器各完成一轮手工验证。
+
+## 13. 实施顺序
 
 1. Go CLI 基座：`.mob` 状态、配置、稳定错误码/JSON、命令路由、日志和安全子进程执行。
 2. Android：SDK/NDK/JDK 发现和注册、受控安装、版本兼容诊断、环境注入。

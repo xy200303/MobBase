@@ -7,7 +7,7 @@ type MobTaskCommand = typeof commands[number];
 export interface MobTaskDefinition extends vscode.TaskDefinition {
   type: "mob";
   command: MobTaskCommand;
-  platform?: "android" | "ios" | "harmony";
+  platform?: "android";
   device?: string;
   artifact?: "apk" | "aab" | "ipa" | "hap";
   output?: string;
@@ -94,8 +94,8 @@ function isValidDefinition(definition: Partial<MobTaskDefinition>): definition i
     && isOptionalBoolean(definition.headless)
     && isOptionalBoolean(definition.noDeviceCreate)
     && isOptionalBoolean(definition.follow)
-    && isOneOf(definition.platform, ["android", "ios", "harmony"])
-    && isOneOf(definition.artifact, ["apk", "aab", "ipa", "hap"])
+    && isOneOf(definition.platform, ["android"])
+    && isOneOf(definition.artifact, ["apk", "aab"])
     && optionsFitCommand(definition);
 }
 
