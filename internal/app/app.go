@@ -97,7 +97,7 @@ func (r runtime) execute(ctx context.Context, args []string) error {
 	case "status":
 		return r.status()
 	case "doctor":
-		return r.doctorAs("mob doctor", args[1:])
+		return r.doctorAs(ctx, "mob doctor", args[1:])
 	case "catalog":
 		return r.catalog(ctx, args[1:])
 	case "build":
@@ -240,6 +240,10 @@ func (r runtime) device(ctx context.Context, args []string) error {
 		return r.deviceScreenshot(ctx, args[1:])
 	case "ui-tree":
 		return r.deviceUITree(ctx, args[1:])
+	case "wait":
+		return r.deviceWait(ctx, args[1:])
+	case "input":
+		return r.deviceInput(ctx, args[1:])
 	case "record":
 		return r.deviceRecord(ctx, args[1:])
 	case "forward":
@@ -513,9 +517,38 @@ func (r runtime) status() error {
 	return nil
 }
 
-func (r runtime) doctorAs(command string, args []string) error {
-	if len(args) > 0 && !(len(args) == 2 && args[0] == "--platform" && args[1] == "android") {
-		return invalidCommand("mob doctor " + strings.Join(args, " "))
+func (r runtime) doctorAs(ctx context.Context, command string, args []string) error {
+	fix, licenses := false, false
+	for len(args) > 0 {
+		switch args[0] {
+		case "--fix":
+			fix = true
+			args = args[1:]
+		case "--accept-licenses":
+			licenses = true
+			args = args[1:]
+		case "--platform":
+			if len(args) != 2 || args[1] != "android" {
+				return invalidCommand(command + " --platform")
+			}
+			args = nil
+		default:
+			return invalidCommand(command + " " + strings.Join(args, " "))
+		}
+	}
+	if fix {
+		current, err := project.Detect("")
+		if err != nil {
+			return err
+		}
+		if current == nil || !targetDeclared(current, "android") {
+			return &codedError{Code: "MOB_PROJECT_UNRECOGNIZED", Message: "mob doctor --fix requires a project that declares an Android target."}
+		}
+		if _, requirements, err := r.prepareAndroidSDK(ctx, current.Root, command, false, false, licenses); err != nil {
+			return err
+		} else if _, err := r.selectProjectJava(ctx, requirements.JavaVersion, false); err != nil {
+			return err
+		}
 	}
 	config, err := r.store.Load()
 	if err != nil {
@@ -690,7 +723,7 @@ func (r runtime) android(ctx context.Context, args []string) error {
 		return r.androidProxy(args[1:])
 	}
 	if len(args) == 1 && args[0] == "doctor" {
-		return r.doctorAs("mob android doctor", []string{"--platform", "android"})
+		return r.doctorAs(ctx, "mob android doctor", []string{"--platform", "android"})
 	}
 	if len(args) >= 1 && args[0] == "create" {
 		return r.androidCreate(ctx, args[1:])

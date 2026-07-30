@@ -303,6 +303,50 @@ func UIHierarchyXML(ctx context.Context, sdks []SDK, nativeID string) ([]byte, e
 	return []byte(result.Output), nil
 }
 
+func WaitForBoot(ctx context.Context, sdks []SDK, nativeID string) error {
+	adb, ok := findADB(sdks)
+	if !ok {
+		return fmt.Errorf("Android Debug Bridge was not found")
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		result, err := system.Run(ctx, adb, []string{"-s", nativeID, "shell", "getprop", "sys.boot_completed"}, nil, "", "")
+		if err == nil && strings.TrimSpace(result.Output) == "1" {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("wait for Android boot: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+func WaitForIdle(ctx context.Context, sdks []SDK, nativeID string) error {
+	adb, ok := findADB(sdks)
+	if !ok {
+		return fmt.Errorf("Android Debug Bridge was not found")
+	}
+	result, err := system.Run(ctx, adb, []string{"-s", nativeID, "shell", "uiautomator", "waitforidle"}, nil, "", "")
+	if err != nil {
+		return fmt.Errorf("wait for Android UI idle: %w: %s", err, strings.TrimSpace(result.Output))
+	}
+	return nil
+}
+
+func Input(ctx context.Context, sdks []SDK, nativeID string, args []string) error {
+	adb, ok := findADB(sdks)
+	if !ok {
+		return fmt.Errorf("Android Debug Bridge was not found")
+	}
+	result, err := system.Run(ctx, adb, append([]string{"-s", nativeID, "shell", "input"}, args...), nil, "", "")
+	if err != nil {
+		return fmt.Errorf("send Android input: %w: %s", err, strings.TrimSpace(result.Output))
+	}
+	return nil
+}
+
 func RecordDevice(ctx context.Context, sdks []SDK, nativeID, output string, seconds int) error {
 	adb, ok := findADB(sdks)
 	if !ok {

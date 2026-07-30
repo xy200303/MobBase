@@ -18,12 +18,15 @@ func (r runtime) logs(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if currentProject == nil || (currentProject.Kind != project.KindAndroid && currentProject.Kind != project.KindFlutter) {
+	if currentProject == nil || (currentProject.Kind != project.KindAndroid && currentProject.Kind != project.KindFlutter && currentProject.Kind != project.KindKotlinMultiplatform) {
 		return &codedError{Code: "MOB_PROJECT_UNRECOGNIZED", Message: "Open a native Android or Flutter project before reading Android logs."}
 	}
-	applicationID, err := project.AndroidApplicationID(currentProject.Root)
-	if err != nil {
-		return &codedError{Code: "MOB_RUNNER_UNAVAILABLE", Message: err.Error(), Remediation: "Declare applicationId in the Android app Gradle module."}
+	applicationID := options.App
+	if applicationID == "" {
+		applicationID, err = project.AndroidApplicationID(currentProject.Root)
+		if err != nil {
+			return &codedError{Code: "MOB_RUNNER_UNAVAILABLE", Message: err.Error(), Remediation: "Declare applicationId in the Android app Gradle module, or pass --app <package>."}
+		}
 	}
 	config, err := r.store.Load()
 	if err != nil {
@@ -77,6 +80,7 @@ func (r runtime) logs(ctx context.Context, args []string) error {
 
 type logsOptions struct {
 	Device string
+	App    string
 	Follow bool
 }
 
@@ -90,6 +94,11 @@ func parseLogs(args []string) (logsOptions, error) {
 		}
 		if len(args) >= 2 && args[0] == "--device" && strings.TrimSpace(args[1]) != "" {
 			options.Device = args[1]
+			args = args[2:]
+			continue
+		}
+		if len(args) >= 2 && args[0] == "--app" && strings.TrimSpace(args[1]) != "" {
+			options.App = args[1]
 			args = args[2:]
 			continue
 		}
