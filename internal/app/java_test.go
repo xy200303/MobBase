@@ -2,8 +2,10 @@ package app
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"testing"
 
 	"github.com/xy200303/MobBase/internal/state"
@@ -84,5 +86,60 @@ func TestJavaRemoveDeletesManagedSDK(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("JDK still exists: %v", err)
+	}
+	config, err := r.store.Load()
+	if err != nil || len(config.Java.SDKs) != 0 {
+		t.Fatalf("stale JDK registration remains: %#v %v", config.Java.SDKs, err)
+	}
+}
+
+func TestSelectCompatibleJavaHonorsCurrentCompatibleJDK(t *testing.T) {
+	sdks := []state.JavaSDK{
+		{Name: "temurin-8", Version: 8},
+		{Name: "liberica-17", Version: 17},
+		{Name: "temurin-17", Version: 17},
+		{Name: "temurin-21", Version: 21},
+	}
+	selected, found := selectCompatibleJava(sdks, "liberica-17", 8)
+	if !found || selected.Name != "liberica-17" {
+		t.Fatalf("selected = %#v, found = %v", selected, found)
+	}
+	selected, found = selectCompatibleJava(sdks, "temurin-8", 17)
+	if !found || selected.Name != "liberica-17" {
+		t.Fatalf("selected compatible fallback = %#v, found = %v", selected, found)
+	}
+}
+
+func TestPruneMissingManagedJavaKeepsImportedRegistrations(t *testing.T) {
+	home := t.TempDir()
+	config := state.Default()
+	config.Java.CurrentSDK = "temurin-8"
+	config.Java.SDKs = []state.JavaSDK{
+		{Name: "temurin-8", Version: 8, Path: filepath.Join(home, "missing-managed"), Ownership: state.OwnershipManaged},
+		{Name: "external-17", Version: 17, Path: filepath.Join(home, "missing-external"), Ownership: state.OwnershipImported},
+	}
+	if !pruneMissingManagedJava(&config) {
+		t.Fatal("expected stale managed JDK to be pruned")
+	}
+	if config.Java.CurrentSDK != "" || len(config.Java.SDKs) != 1 || config.Java.SDKs[0].Name != "external-17" {
+		t.Fatalf("unexpected registrations after prune: %#v", config.Java)
+	}
+}
+
+func TestReplaceJavaSDKReplacesSameName(t *testing.T) {
+	sdks := replaceJavaSDK([]state.JavaSDK{{Name: "temurin-17", Version: 17, Path: "old"}, {Name: "liberica-17", Version: 17, Path: "external"}}, state.JavaSDK{Name: "temurin-17", Version: 17, Path: "new", Ownership: state.OwnershipManaged})
+	if len(sdks) != 2 || sdks[1].Name != "temurin-17" || sdks[1].Path != "new" {
+		t.Fatalf("SDK replacement failed: %#v", sdks)
+	}
+}
+
+func TestJavaRemovalLockedRecognizesWindowsLockMessages(t *testing.T) {
+	if goruntime.GOOS != "windows" {
+		t.Skip("Windows-specific error classification")
+	}
+	for _, message := range []string{"Access is denied", "The process cannot access the file because it is being used by another process."} {
+		if !javaRemovalLocked(errors.New(message)) {
+			t.Fatalf("lock message was not recognized: %q", message)
+		}
 	}
 }

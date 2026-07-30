@@ -65,6 +65,19 @@ func TestStreamLinesReadsChildOutput(t *testing.T) {
 	}
 }
 
+func TestFilterWindowsBatchEchoPreservesGradleDiagnostics(t *testing.T) {
+	output := "C:\\\\work>set APP_HOME=C:\\\\work\nC:\\\\work>if defined JAVA_HOME goto findJavaFromJavaHome\nFAILURE: Build failed with an exception.\n* What went wrong:\nUnsupported class file major version 65\n"
+	filtered := FilterWindowsBatchEcho(output)
+	if strings.Contains(filtered, "set APP_HOME") || strings.Contains(filtered, "if defined JAVA_HOME") {
+		t.Fatalf("batch echo was retained: %q", filtered)
+	}
+	for _, wanted := range []string{"FAILURE: Build failed", "Unsupported class file major version 65"} {
+		if !strings.Contains(filtered, wanted) {
+			t.Fatalf("missing diagnostic %q in %q", wanted, filtered)
+		}
+	}
+}
+
 func containsLine(lines []string, wanted string) bool {
 	for _, line := range lines {
 		if line == wanted {

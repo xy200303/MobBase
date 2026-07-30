@@ -78,6 +78,59 @@ func Stream(ctx context.Context, program string, args []string, env []string, di
 	return command.Run()
 }
 
+// StreamFiltered streams an official tool command while suppressing cmd.exe's
+// echoed .bat implementation lines. Gradle diagnostics and task output remain
+// untouched, which keeps interactive failures readable on Windows.
+func StreamFiltered(ctx context.Context, program string, args []string, env []string, dir string, stdout, stderr io.Writer) error {
+	return StreamLines(ctx, program, args, env, dir, func(line string) error {
+		if IsWindowsBatchEcho(line) {
+			return nil
+		}
+		_, err := fmt.Fprintln(stdout, line)
+		return err
+	}, func(line string) error {
+		if IsWindowsBatchEcho(line) {
+			return nil
+		}
+		_, err := fmt.Fprintln(stderr, line)
+		return err
+	})
+}
+
+// FilterWindowsBatchEcho removes the command echo produced when cmd.exe runs
+// a .bat file without hiding actual build output.
+func FilterWindowsBatchEcho(output string) string {
+	lines := strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n")
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if !IsWindowsBatchEcho(line) {
+			filtered = append(filtered, line)
+		}
+	}
+	return strings.Join(filtered, "\n")
+}
+
+// IsWindowsBatchEcho recognizes the Gradle and SDK wrapper commands echoed by
+// cmd.exe. A normal Gradle error never has the drive-path prompt prefix.
+func IsWindowsBatchEcho(line string) bool {
+	lower := strings.ToLower(strings.TrimSpace(line))
+	command := lower
+	hasPrompt := false
+	if marker := strings.LastIndex(command, ">"); marker > 1 && strings.Contains(command[:marker], `:\`) {
+		command = strings.TrimSpace(command[marker+1:])
+		hasPrompt = true
+	}
+	for _, prefix := range []string{
+		"if ", "set dirname=", "set app_base_name=", "set app_home=", "set default_jvm_opts=",
+		"set java_exe=", "set classpath=", "for %", "rem ", "@rem ", "\"%java_exe%\"",
+	} {
+		if strings.HasPrefix(command, prefix) && (hasPrompt || prefix != "if ") {
+			return true
+		}
+	}
+	return false
+}
+
 // StreamLines runs a child process and delivers complete stdout and stderr
 // lines as they arrive. Receivers may return an error to stop the child
 // process, which keeps machine protocols from silently losing malformed data.

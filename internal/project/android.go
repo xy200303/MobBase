@@ -19,12 +19,15 @@ type AndroidRequirements struct {
 }
 
 var (
-	compileSDKPattern    = regexp.MustCompile(`(?m)\bcompileSdk(?:Version)?\s*(?:=\s*)?(\d+)\b`)
-	buildToolsPattern    = regexp.MustCompile(`(?m)\bbuildToolsVersion\s*(?:=\s*)?["']([^"']+)["']`)
-	ndkVersionPattern    = regexp.MustCompile(`(?m)\bndkVersion\s*(?:=\s*)?["']([^"']+)["']`)
-	javaVersionPattern   = regexp.MustCompile(`(?m)\b(?:sourceCompatibility|targetCompatibility)\s*(?:=\s*)?(?:JavaVersion\.VERSION_(?:1_)?|JavaVersion\.VERSION_?1_)?(\d+)\b`)
-	jvmToolchainPattern  = regexp.MustCompile(`(?m)\b(?:jvmToolchain|JavaLanguageVersion\.of)\s*\(?\s*(\d+)\b`)
-	applicationIDPattern = regexp.MustCompile(`(?m)\bapplicationId\s*(?:=\s*)?["']([^"']+)["']`)
+	compileSDKPattern = regexp.MustCompile(`(?m)\bcompileSdk(?:Version)?\s*(?:=\s*)?(\d+)\b`)
+	buildToolsPattern = regexp.MustCompile(`(?m)\bbuildToolsVersion\s*(?:=\s*)?["']([^"']+)["']`)
+	ndkVersionPattern = regexp.MustCompile(`(?m)\bndkVersion\s*(?:=\s*)?["']([^"']+)["']`)
+	// sourceCompatibility and targetCompatibility intentionally do not appear
+	// here. They select bytecode compatibility, not the JDK that runs Gradle.
+	jvmToolchainPattern     = regexp.MustCompile(`(?m)\b(?:jvmToolchain|JavaLanguageVersion\.of)\s*\(?\s*(\d+)\b`)
+	androidPluginPattern    = regexp.MustCompile(`(?m)\bid\s*(?:\(\s*)?["']com\.android\.(?:application|library|test)["']\s*\)?\s*version\s*["'](\d+)`)
+	androidClasspathPattern = regexp.MustCompile(`(?m)com\.android\.tools\.build:gradle:(\d+)`)
+	applicationIDPattern    = regexp.MustCompile(`(?m)\bapplicationId\s*(?:=\s*)?["']([^"']+)["']`)
 )
 
 // AndroidRequirementsFor scans Gradle source files for explicit Android
@@ -66,12 +69,14 @@ func AndroidRequirementsFor(root string) (AndroidRequirements, error) {
 				requirements.NDKVersion = match[1]
 			}
 		}
-		if requirements.JavaVersion == 0 {
-			if match := javaVersionPattern.FindStringSubmatch(content); len(match) == 2 {
-				requirements.JavaVersion, _ = strconv.Atoi(match[1])
-			} else if match := jvmToolchainPattern.FindStringSubmatch(content); len(match) == 2 {
-				requirements.JavaVersion, _ = strconv.Atoi(match[1])
-			}
+		if match := jvmToolchainPattern.FindStringSubmatch(content); len(match) == 2 {
+			requirements.JavaVersion = maxJavaVersion(requirements.JavaVersion, javaVersion(match[1]))
+		}
+		if match := androidPluginPattern.FindStringSubmatch(content); len(match) == 2 {
+			requirements.JavaVersion = maxJavaVersion(requirements.JavaVersion, minimumJavaForAGP(javaVersion(match[1])))
+		}
+		if match := androidClasspathPattern.FindStringSubmatch(content); len(match) == 2 {
+			requirements.JavaVersion = maxJavaVersion(requirements.JavaVersion, minimumJavaForAGP(javaVersion(match[1])))
 		}
 		return nil
 	})
@@ -79,6 +84,32 @@ func AndroidRequirementsFor(root string) (AndroidRequirements, error) {
 		return AndroidRequirements{}, fmt.Errorf("inspect Android Gradle requirements: %w", err)
 	}
 	return requirements, nil
+}
+
+func javaVersion(value string) int {
+	version, _ := strconv.Atoi(value)
+	return version
+}
+
+func maxJavaVersion(current, candidate int) int {
+	if candidate > current {
+		return candidate
+	}
+	return current
+}
+
+// minimumJavaForAGP follows Android Gradle Plugin runtime requirements. It
+// deliberately returns zero for pre-7 releases: without an explicit JVM
+// toolchain, Mob should respect the user's selected JDK instead of forcing 8.
+func minimumJavaForAGP(major int) int {
+	switch {
+	case major >= 8:
+		return 17
+	case major == 7:
+		return 11
+	default:
+		return 0
+	}
 }
 
 // AndroidApplicationID returns the explicit applicationId declared by an

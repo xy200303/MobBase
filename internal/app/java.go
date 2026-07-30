@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -65,6 +66,9 @@ func (r runtime) javaRemove(args []string) error {
 		return &codedError{Code: "MOB_EXTERNAL_TOOLCHAIN_WRITE_DENIED", Message: "Only JDKs inside Mob's managed toolchain directory can be removed."}
 	}
 	if err := os.RemoveAll(sdk.Path); err != nil {
+		if javaRemovalLocked(err) {
+			return &codedError{Code: "MOB_TOOLCHAIN_IN_USE", Message: "JDK " + sdk.Name + " is in use by a Java or Gradle process.", Remediation: "Run the affected project's gradlew.bat --stop, then close the IDE or terminal that owns the process and retry mob java remove " + sdk.Name + " --yes."}
+		}
 		return fmt.Errorf("remove Mob-managed JDK: %w", err)
 	}
 	config.Java.SDKs = append(config.Java.SDKs[:index], config.Java.SDKs[index+1:]...)
@@ -119,7 +123,7 @@ func (r runtime) javaInstall(ctx context.Context, args []string) error {
 		return err
 	}
 	name := "temurin-" + strconv.Itoa(major)
-	config.Java.SDKs = append(config.Java.SDKs, state.JavaSDK{Name: name, Version: major, Path: destination, Ownership: state.OwnershipManaged})
+	config.Java.SDKs = replaceJavaSDK(config.Java.SDKs, state.JavaSDK{Name: name, Version: major, Path: destination, Ownership: state.OwnershipManaged})
 	if config.Java.CurrentSDK == "" {
 		config.Java.CurrentSDK = name
 	}
@@ -162,6 +166,11 @@ func (r runtime) javaList(ctx context.Context) error {
 	config, err := r.store.Load()
 	if err != nil {
 		return err
+	}
+	if pruneMissingManagedJava(&config) {
+		if err := r.store.Save(config); err != nil {
+			return err
+		}
 	}
 	sdks, err := discoverJava(ctx, config)
 	if err != nil {
@@ -409,26 +418,82 @@ func normalizedPath(path string) string {
 	return strings.ToLower(abs)
 }
 
+func javaExecutable(home string) string {
+	path := filepath.Join(home, "bin", "java")
+	if goruntime.GOOS == "windows" {
+		return path + ".exe"
+	}
+	return path
+}
+
+func managedJavaExists(sdk state.JavaSDK) bool {
+	if sdk.Ownership != state.OwnershipManaged {
+		return true
+	}
+	info, err := os.Stat(javaExecutable(sdk.Path))
+	return err == nil && !info.IsDir()
+}
+
+// pruneMissingManagedJava removes only Mob-owned registrations whose Java
+// executable is gone. Imported paths can live on removable media and remain
+// registered even when temporarily unavailable.
+func pruneMissingManagedJava(config *state.Config) bool {
+	filtered := make([]state.JavaSDK, 0, len(config.Java.SDKs))
+	changed := false
+	for _, sdk := range config.Java.SDKs {
+		if !managedJavaExists(sdk) {
+			if config.Java.CurrentSDK == sdk.Name {
+				config.Java.CurrentSDK = ""
+			}
+			changed = true
+			continue
+		}
+		filtered = append(filtered, sdk)
+	}
+	if changed {
+		config.Java.SDKs = filtered
+	}
+	return changed
+}
+
+func replaceJavaSDK(sdks []state.JavaSDK, replacement state.JavaSDK) []state.JavaSDK {
+	updated := make([]state.JavaSDK, 0, len(sdks)+1)
+	for _, sdk := range sdks {
+		if sdk.Name != replacement.Name {
+			updated = append(updated, sdk)
+		}
+	}
+	return append(updated, replacement)
+}
+
+func javaRemovalLocked(err error) bool {
+	if goruntime.GOOS != "windows" {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return errors.Is(err, os.ErrPermission) ||
+		strings.Contains(message, "access is denied") ||
+		strings.Contains(message, "being used by another process") ||
+		strings.Contains(message, "process cannot access the file") ||
+		strings.Contains(message, "另一个程序正在使用")
+}
+
 func (r runtime) selectProjectJava(ctx context.Context, required int, noInstall bool) (state.JavaSDK, error) {
 	config, err := r.store.Load()
 	if err != nil {
 		return state.JavaSDK{}, err
 	}
+	if pruneMissingManagedJava(&config) {
+		if err := r.store.Save(config); err != nil {
+			return state.JavaSDK{}, err
+		}
+	}
 	sdks, err := discoverJava(ctx, config)
 	if err != nil {
 		return state.JavaSDK{}, err
 	}
-	if config.Java.CurrentSDK != "" {
-		for _, sdk := range sdks {
-			if sdk.Name == config.Java.CurrentSDK && (required == 0 || sdk.Version == required) {
-				return sdk, nil
-			}
-		}
-	}
-	for _, sdk := range sdks {
-		if required == 0 || sdk.Version == required {
-			return sdk, nil
-		}
+	if selected, found := selectCompatibleJava(sdks, config.Java.CurrentSDK, required); found {
+		return selected, nil
 	}
 	requirement := "a usable JDK"
 	if required > 0 {
@@ -441,6 +506,28 @@ func (r runtime) selectProjectJava(ctx context.Context, required int, noInstall 
 		return state.JavaSDK{}, err
 	}
 	return r.selectProjectJava(ctx, required, true)
+}
+
+// selectCompatibleJava treats required as a minimum runtime version. The
+// explicitly selected JDK wins when compatible; otherwise prefer the lowest
+// compatible installed JDK to avoid upgrading a project unnecessarily.
+func selectCompatibleJava(sdks []state.JavaSDK, current string, required int) (state.JavaSDK, bool) {
+	for _, sdk := range sdks {
+		if sdk.Name == current && (required == 0 || sdk.Version >= required) {
+			return sdk, true
+		}
+	}
+	var selected state.JavaSDK
+	found := false
+	for _, sdk := range sdks {
+		if required != 0 && sdk.Version < required {
+			continue
+		}
+		if !found || sdk.Version < selected.Version || (sdk.Version == selected.Version && sdk.Name < selected.Name) {
+			selected, found = sdk, true
+		}
+	}
+	return selected, found
 }
 
 func defaultJavaVersion(required int) int {

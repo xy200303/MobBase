@@ -71,25 +71,12 @@ func sdkManagerDiagnostic(output string) string {
 	meaningful := make([]string, 0, len(lines))
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "" || isWindowsBatchEcho(line) {
+		if line == "" || system.IsWindowsBatchEcho(line) {
 			continue
 		}
 		meaningful = append(meaningful, line)
 	}
 	return strings.Join(meaningful, "\n")
-}
-
-func isWindowsBatchEcho(line string) bool {
-	lower := strings.ToLower(line)
-	if index := strings.Index(lower, ">if \"windows_nt\""); index >= 0 {
-		return true
-	}
-	for _, prefix := range []string{"set dirname=", "set app_base_name=", "set app_home=", "if defined java_home", "if not defined java_exe", "rem ", "@rem "} {
-		if strings.HasPrefix(lower, prefix) {
-			return true
-		}
-	}
-	return false
 }
 
 // SDKManager finds a command-line-tools installation without depending on a

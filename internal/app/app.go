@@ -2404,7 +2404,7 @@ func helpData(path string) (helpResponse, bool) {
 		base.SideEffects = "permanently deletes the selected Mob-managed JDK directory"
 		base.Examples = []string{"mob java remove temurin-17 --yes"}
 		base.Related = []string{"mob java list", "mob java install"}
-		base.Errors = []string{"MOB_INVALID_ARGUMENT", "MOB_TOOLCHAIN_MISSING", "MOB_EXTERNAL_TOOLCHAIN_WRITE_DENIED"}
+		base.Errors = []string{"MOB_INVALID_ARGUMENT", "MOB_TOOLCHAIN_MISSING", "MOB_EXTERNAL_TOOLCHAIN_WRITE_DENIED", "MOB_TOOLCHAIN_IN_USE"}
 	case "mob java import":
 		base.Usage = "mob java import --path <jdk-root> --name <name> [--json]"
 		base.Description = "Register an existing JDK after validating its java executable and version."
