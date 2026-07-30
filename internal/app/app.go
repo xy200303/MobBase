@@ -66,6 +66,10 @@ type runtime struct {
 // Commands that register an SDK persist only references, never SDK contents.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	args, jsonOutput, eventMode := takeOutput(args)
+	if isVersionCommand(args) {
+		run := runtime{json: jsonOutput, eventMode: eventMode, out: stdout, err: stderr, events: &eventStream{}, terminal: ui.New(stdout, stderr)}
+		return run.version()
+	}
 	homePath, err := home.Resolve()
 	if err != nil {
 		return writeFailure(runtime{json: jsonOutput, eventMode: eventMode, out: stdout, err: stderr, events: &eventStream{}}, "mob", err)
@@ -82,6 +86,11 @@ func (r runtime) execute(ctx context.Context, args []string) error {
 		return r.help(args[1:])
 	}
 	switch args[0] {
+	case "version", "--version", "-V":
+		if len(args) != 1 {
+			return invalidCommand(strings.Join(args, " "))
+		}
+		return r.versionResult()
 	case "status":
 		return r.status()
 	case "doctor":
@@ -123,6 +132,26 @@ func (r runtime) execute(ctx context.Context, args []string) error {
 	default:
 		return invalidCommand(strings.Join(args, " "))
 	}
+}
+
+func isVersionCommand(args []string) bool {
+	return len(args) == 1 && (args[0] == "version" || args[0] == "--version" || args[0] == "-V")
+}
+
+func (r runtime) version() int {
+	if err := r.versionResult(); err != nil {
+		return writeFailure(r, "mob version", err)
+	}
+	return 0
+}
+
+func (r runtime) versionResult() error {
+	data := map[string]string{"version": cliVersion}
+	if r.json {
+		return r.result("mob version", data)
+	}
+	fmt.Fprintf(r.out, "mob %s\n", cliVersion)
+	return nil
 }
 
 // reservedPlatform keeps the cross-platform CLI surface explicit while Android
@@ -2011,10 +2040,15 @@ func helpData(path string) (helpResponse, bool) {
 	known := true
 	switch path {
 	case "mob", "mob help":
-		base.Usage = "mob <status|doctor|catalog|build|run|debug|test|logs|release|env|home|support|java|flutter|fvm|android|ios|harmony|device> [--json]"
+		base.Usage = "mob <version|status|doctor|catalog|build|run|debug|test|logs|release|env|home|support|java|flutter|fvm|android|ios|harmony|device> [--json]"
 		base.Description = "Manage mobile development toolchains."
-		base.Examples = []string{"mob status", "mob android sdk list --json", "mob device list"}
-		base.Related = []string{"mob status", "mob doctor", "mob catalog", "mob build", "mob run", "mob debug", "mob test", "mob logs", "mob release", "mob env show", "mob home show", "mob support bundle", "mob java list", "mob flutter list", "mob fvm status", "mob android sdk list", "mob ios doctor", "mob harmony doctor", "mob device list"}
+		base.Examples = []string{"mob --version", "mob status", "mob android sdk list --json", "mob device list"}
+		base.Related = []string{"mob version", "mob status", "mob doctor", "mob catalog", "mob build", "mob run", "mob debug", "mob test", "mob logs", "mob release", "mob env show", "mob home show", "mob support bundle", "mob java list", "mob flutter list", "mob fvm status", "mob android sdk list", "mob ios doctor", "mob harmony doctor", "mob device list"}
+	case "mob version":
+		base.Usage = "mob version [--json]"
+		base.Description = "Print the version embedded in the current Mob executable. --version and -V are equivalent aliases."
+		base.Examples = []string{"mob --version", "mob version --json"}
+		base.Related = []string{"mob help", "mob status"}
 	case "mob android":
 		base.Usage = "mob android <doctor|create|sdk|ndk|emulator|device|proxy> [--json]"
 		base.Description = "Manage Android SDKs, NDKs, emulators, ADB devices, and Android download proxy settings."

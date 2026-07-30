@@ -200,6 +200,7 @@ mob run --device android:emulator-5554 -- .\gradlew.bat installDebug
 
 | 目标 | 命令 |
 | --- | --- |
+| 查看当前 Mob 版本 | `mob --version` 或 `mob version` |
 | 查看本机总览 | `mob status` |
 | 诊断 Android 环境 | `mob doctor` 或 `mob android doctor` |
 | 查看官方可安装目录 | `mob catalog --platform android` |

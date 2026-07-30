@@ -141,6 +141,45 @@ func TestTakeOutputDistinguishesStandardJSONFromEventStream(t *testing.T) {
 	}
 }
 
+func TestVersionCommandsExposeEmbeddedVersionWithoutResolvingHome(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if exit := Run(context.Background(), []string{"--version"}, &stdout, &stderr); exit != 0 {
+		t.Fatalf("--version exit = %d, stderr = %s", exit, stderr.String())
+	}
+	if got, want := stdout.String(), "mob "+cliVersion+"\n"; got != want {
+		t.Fatalf("--version output = %q, want %q", got, want)
+	}
+
+	stdout.Reset()
+	if exit := Run(context.Background(), []string{"version", "--json"}, &stdout, &stderr); exit != 0 {
+		t.Fatalf("version JSON exit = %d, stderr = %s", exit, stderr.String())
+	}
+	event := assertEvent(t, stdout.Bytes(), true, "mob version")
+	if event["data"].(map[string]interface{})["version"] != cliVersion {
+		t.Fatalf("version JSON = %s", stdout.String())
+	}
+
+	stdout.Reset()
+	if exit := Run(context.Background(), []string{"-V", "--json=events"}, &stdout, &stderr); exit != 0 {
+		t.Fatalf("-V events exit = %d, stderr = %s", exit, stderr.String())
+	}
+	event = assertEvent(t, stdout.Bytes(), true, "mob version")
+	if event["event"] != "completed" || event["sequence"] != float64(1) {
+		t.Fatalf("version event = %s", stdout.String())
+	}
+}
+
+func TestVersionHelpContract(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if exit := Run(context.Background(), []string{"help", "version", "--json"}, &stdout, &stderr); exit != 0 {
+		t.Fatalf("version help exit = %d, stderr = %s", exit, stderr.String())
+	}
+	data := assertEvent(t, stdout.Bytes(), true, "mob help")["data"].(map[string]interface{})
+	if data["usage"] != "mob version [--json]" || data["cliVersion"] != cliVersion {
+		t.Fatalf("version help = %s", stdout.String())
+	}
+}
+
 func TestEnvShowJSONContract(t *testing.T) {
 	mobHome := t.TempDir()
 	t.Setenv("MOB_HOME", mobHome)

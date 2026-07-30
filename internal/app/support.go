@@ -14,7 +14,9 @@ import (
 	"github.com/xy200303/MobBase/internal/state"
 )
 
-const cliVersion = "0.1.0"
+// cliVersion is overridden for release artifacts with Go's -ldflags -X.
+// Development builds deliberately remain identifiable without requiring Git.
+var cliVersion = "dev"
 
 // support creates a deliberately small diagnostic archive. It uses only Mob's
 // own configuration and process metadata so that it cannot accidentally ship

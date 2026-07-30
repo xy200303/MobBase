@@ -96,6 +96,7 @@ mob run --device android:emulator-5554 -- fvm flutter run -d {{mob.device.native
 
 ```text
 mob status                              SDK、工具、设备、当前项目总览
+mob version | --version | -V             输出当前可执行文件的嵌入版本；支持 --json
 mob doctor [--platform <id>]            诊断本机和当前项目需求
 mob help [<command>...] [--format text|markdown|json] [--json]
                                         查看命令、参数、示例和副作用；`--json`/`--format json` 供插件和模型调用
