@@ -44,23 +44,81 @@ function Resolve-ReleaseTag([string]$RequestedVersion) {
     return $release.tag_name
 }
 
+function Get-MobDataHome {
+    if (-not [string]::IsNullOrWhiteSpace($env:MOB_HOME)) {
+        return $env:MOB_HOME
+    }
+    return (Join-Path $HOME ".mob")
+}
+
+function Get-ReleaseCacheDirectory([string]$Tag) {
+    $tagBytes = [System.Text.Encoding]::UTF8.GetBytes($Tag)
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $tagHash = $hasher.ComputeHash($tagBytes)
+    } finally {
+        $hasher.Dispose()
+    }
+    $tagID = -join ($tagHash | ForEach-Object { $_.ToString("x2") })
+    return (Join-Path (Get-MobDataHome) (Join-Path "cache\releases\windows-amd64" $tagID))
+}
+
+function Get-Checksum([object]$Content) {
+    if ($Content -is [byte[]]) {
+        $text = [System.Text.Encoding]::UTF8.GetString($Content)
+    } else {
+        $text = [string]$Content
+    }
+    return [regex]::Match($text, "(?i)\b[a-f0-9]{64}\b").Value.ToLowerInvariant()
+}
+
+function Get-VerifiedCachedBinary([string]$CacheBinary, [string]$CacheChecksum) {
+    if (-not (Test-Path -LiteralPath $CacheBinary -PathType Leaf) -or -not (Test-Path -LiteralPath $CacheChecksum -PathType Leaf)) {
+        return $null
+    }
+    try {
+        $expected = Get-Checksum ([System.IO.File]::ReadAllBytes($CacheChecksum))
+        if ($expected.Length -ne 64) {
+            return $null
+        }
+        $actual = (Get-FileHash -LiteralPath $CacheBinary -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actual -eq $expected) {
+            return $expected
+        }
+    } catch {
+        return $null
+    }
+    return $null
+}
+
 function Install-ReleaseBinary([string]$Destination) {
     $tag = Resolve-ReleaseTag $Version
     $assetName = "mob-windows-amd64.exe"
     $escapedTag = [uri]::EscapeDataString($tag)
     $assetURL = "https://github.com/xy200303/MobBase/releases/download/$escapedTag/$assetName"
+    $cacheDir = Get-ReleaseCacheDirectory $tag
+    $cacheBinary = Join-Path $cacheDir $assetName
+    $cacheChecksum = Join-Path $cacheDir "$assetName.sha256"
+    if ($null -ne (Get-VerifiedCachedBinary $cacheBinary $cacheChecksum)) {
+        Copy-Item -LiteralPath $cacheBinary -Destination $Destination -Force
+        Write-Host "Using cached Mob release $tag"
+        return
+    }
+
     $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("mob-" + [System.Guid]::NewGuid().ToString() + ".exe")
     try {
-        Invoke-WebRequest -Uri $assetURL -OutFile $temporary
-        $checksumText = (Invoke-WebRequest -Uri "$assetURL.sha256").Content
-        $expected = [regex]::Match($checksumText, "(?i)\b[a-f0-9]{64}\b").Value.ToLowerInvariant()
+        $expected = Get-Checksum ((Invoke-WebRequest -Uri "$assetURL.sha256").Content)
         if ($expected.Length -ne 64) {
             Write-InstallError "Release $tag does not provide a valid $assetName.sha256 file."
         }
+        Invoke-WebRequest -Uri $assetURL -OutFile $temporary
         $actual = (Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($actual -ne $expected) {
             Write-InstallError "Downloaded $assetName does not match the release SHA-256."
         }
+        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+        Copy-Item -LiteralPath $temporary -Destination $cacheBinary -Force
+        [System.IO.File]::WriteAllText($cacheChecksum, "$expected  $assetName`n", [System.Text.Encoding]::ASCII)
         Copy-Item -LiteralPath $temporary -Destination $Destination -Force
     } finally {
         Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue

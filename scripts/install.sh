@@ -86,20 +86,47 @@ else
     [[ -n "$VERSION" ]] || fail "Could not resolve the latest GitHub Release tag."
   fi
   ASSET_URL="https://github.com/xy200303/MobBase/releases/download/$VERSION/$ASSET_NAME"
+  CACHE_ROOT="${MOB_HOME:-$HOME/.mob}/cache/releases"
+  if command -v sha256sum >/dev/null 2>&1; then
+    TAG_ID="$(printf '%s' "$VERSION" | sha256sum | awk '{print $1}')"
+  else
+    TAG_ID="$(printf '%s' "$VERSION" | shasum -a 256 | awk '{print $1}')"
+  fi
+  CACHE_DIR="$CACHE_ROOT/$ASSET_NAME/$TAG_ID"
+  CACHE_BINARY="$CACHE_DIR/$ASSET_NAME"
+  CACHE_CHECKSUM="$CACHE_DIR/$ASSET_NAME.sha256"
   BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mob-install.XXXXXX")"
   trap 'rm -rf "$BUILD_DIR"' EXIT
-  curl -fsSL --retry 3 -o "$BUILD_DIR/$ASSET_NAME" "$ASSET_URL"
-  EXPECTED="$(curl -fsSL "$ASSET_URL.sha256" | grep -Eo '[A-Fa-f0-9]{64}' | head -n 1)"
-  [[ ${#EXPECTED} -eq 64 ]] || fail "Release $VERSION does not provide a valid $ASSET_NAME.sha256 file."
-  if command -v sha256sum >/dev/null 2>&1; then
-    ACTUAL="$(sha256sum "$BUILD_DIR/$ASSET_NAME" | awk '{print $1}')"
-  else
-    ACTUAL="$(shasum -a 256 "$BUILD_DIR/$ASSET_NAME" | awk '{print $1}')"
+  if [[ -f "$CACHE_BINARY" && -f "$CACHE_CHECKSUM" ]]; then
+    EXPECTED="$(grep -Eo '[A-Fa-f0-9]{64}' "$CACHE_CHECKSUM" | head -n 1)"
+    if command -v sha256sum >/dev/null 2>&1; then
+      ACTUAL="$(sha256sum "$CACHE_BINARY" | awk '{print $1}')"
+    else
+      ACTUAL="$(shasum -a 256 "$CACHE_BINARY" | awk '{print $1}')"
+    fi
+    if [[ "$(printf '%s' "$ACTUAL" | tr '[:upper:]' '[:lower:]')" == "$(printf '%s' "$EXPECTED" | tr '[:upper:]' '[:lower:]')" ]]; then
+      install -m 0755 "$CACHE_BINARY" "$INSTALL_DIR/mob"
+      printf 'Using cached Mob release %s\n' "$VERSION"
+      CACHE_HIT=1
+    fi
   fi
-  ACTUAL="$(printf '%s' "$ACTUAL" | tr '[:upper:]' '[:lower:]')"
-  EXPECTED="$(printf '%s' "$EXPECTED" | tr '[:upper:]' '[:lower:]')"
-  [[ "$ACTUAL" == "$EXPECTED" ]] || fail "Downloaded $ASSET_NAME does not match the release SHA-256."
-  install -m 0755 "$BUILD_DIR/$ASSET_NAME" "$INSTALL_DIR/mob"
+  if [[ "${CACHE_HIT:-0}" -ne 1 ]]; then
+    curl -fsSL --retry 3 -o "$BUILD_DIR/$ASSET_NAME" "$ASSET_URL"
+    EXPECTED="$(curl -fsSL "$ASSET_URL.sha256" | grep -Eo '[A-Fa-f0-9]{64}' | head -n 1)"
+    [[ ${#EXPECTED} -eq 64 ]] || fail "Release $VERSION does not provide a valid $ASSET_NAME.sha256 file."
+    if command -v sha256sum >/dev/null 2>&1; then
+      ACTUAL="$(sha256sum "$BUILD_DIR/$ASSET_NAME" | awk '{print $1}')"
+    else
+      ACTUAL="$(shasum -a 256 "$BUILD_DIR/$ASSET_NAME" | awk '{print $1}')"
+    fi
+    ACTUAL="$(printf '%s' "$ACTUAL" | tr '[:upper:]' '[:lower:]')"
+    EXPECTED="$(printf '%s' "$EXPECTED" | tr '[:upper:]' '[:lower:]')"
+    [[ "$ACTUAL" == "$EXPECTED" ]] || fail "Downloaded $ASSET_NAME does not match the release SHA-256."
+    mkdir -p "$CACHE_DIR"
+    install -m 0755 "$BUILD_DIR/$ASSET_NAME" "$CACHE_BINARY"
+    printf '%s  %s\n' "$EXPECTED" "$ASSET_NAME" > "$CACHE_CHECKSUM"
+    install -m 0755 "$BUILD_DIR/$ASSET_NAME" "$INSTALL_DIR/mob"
+  fi
 fi
 
 add_to_path() {

@@ -81,7 +81,7 @@ Mob 不会永久修改系统 `PATH`、`JAVA_HOME`、`ANDROID_HOME` 或 `ANDROID_
 
 ### 一键安装脚本
 
-仓库提供跨平台安装脚本。它们默认从 `xy200303/MobBase` 的 GitHub Release 下载当前宿主系统的最终二进制产物与同名 `.sha256` 校验文件，校验通过后安装到 `MOB_INSTALL_DIR`、`MOB_HOME/bin` 或默认的 `~/.mob/bin`，并默认只更新当前用户的 `PATH`。安装器不会请求管理员权限，也不会修改 Android/JDK 环境变量。
+仓库提供跨平台安装脚本。它们默认从 `xy200303/MobBase` 的 GitHub Release 下载当前宿主系统的最终二进制产物与同名 `.sha256` 校验文件，校验通过后安装到 `MOB_INSTALL_DIR`、`MOB_HOME/bin` 或默认的 `~/.mob/bin`，并默认只更新当前用户的 `PATH`。安装器会将已校验的 Release 二进制缓存到 `~/.mob/cache/releases/<platform>/<version-hash>`（或 `MOB_HOME`）；再次安装同一版本时直接复用缓存，缓存校验失败才重新下载。安装器不会请求管理员权限，也不会修改 Android/JDK 环境变量。
 
 Windows PowerShell：
 
