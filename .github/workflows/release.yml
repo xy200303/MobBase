@@ -54,7 +54,7 @@ jobs:
           sudo apt-get install -y xvfb xauth
           npm ci
           xvfb-run --auto-servernum npm test
-          test "v$(node -p \"require('./package.json').version\")" = "$RELEASE_TAG"
+          test "v$(node -p 'require("./package.json").version')" = "$RELEASE_TAG"
           mkdir -p ../../dist
           npm run package -- --out "../../dist/mob-vscode-${RELEASE_TAG}.vsix"
 
