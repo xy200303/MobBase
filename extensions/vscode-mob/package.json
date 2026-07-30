@@ -2,7 +2,7 @@
   "name": "mob-vscode",
   "displayName": "Mob Mobile Environment",
   "description": "Manage and use mobile development environments through the Mob CLI.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "xy200303",
   "repository": {
     "type": "git",
