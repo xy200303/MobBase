@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npm test
+          xvfb-run --auto-servernum npm test
           test "v$(node -p \"require('./package.json').version\")" = "$RELEASE_TAG"
           mkdir -p ../../dist
           npm run package -- --out "../../dist/mob-vscode-${RELEASE_TAG}.vsix"
