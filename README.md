@@ -5,8 +5,8 @@
 <h1 align="center">Mob</h1>
 
 <p align="center">
-  <strong>让移动开发环境随项目就绪。</strong><br />
-  面向开发者、VS Code、CI 和 AI Agent 的移动工具链管理 CLI。
+  <strong>管理 Android 开发所需的本机工具链。</strong><br />
+  为终端、VS Code 和持续集成提供一致的环境准备与运行入口。
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="#快速开始">快速开始</a> ·
-  <a href="#为-ai-和自动化设计">AI 与自动化</a> ·
+  <a href="#自动化接口">自动化接口</a> ·
   <a href="#vs-code-扩展">VS Code 扩展</a> ·
   <a href="docs/PRODUCT_PLAN.md">产品规范</a> ·
   <a href="docs/TEST_REPORT_2026-07-30.md">测试报告</a>
@@ -28,9 +28,9 @@
 
 ---
 
-Mob 管理移动开发所需的本机工具链，并在构建、运行和调试时只向当前子进程注入正确环境。它的角色类似 `nvm`，但面向 Android SDK、NDK、JDK、Flutter/FVM、ADB、模拟器和设备。
+Mob 是移动开发工具链管理 CLI。当前版本完整支持 Android：发现或安装 SDK、NDK、JDK、ADB、Emulator 和 Flutter/FVM，并在构建、运行和调试时只向当前子进程注入所需环境。
 
-Mob 不替代 Gradle、Android Studio、Flutter、FVM、Xcode 或 DevEco。它负责发现、安装、选择和衔接这些官方工具，让一个终端命令、一个 VS Code 操作或一个 AI 调用得到相同的结果。
+Mob 不替代 Gradle、Android Studio、Flutter、FVM、Xcode 或 DevEco。项目仍使用自己的 Gradle Wrapper、Flutter 配置和官方构建入口；Mob 负责本机工具链的发现、选择、安装与环境注入。
 
 ## 为什么是 Mob
 
@@ -39,7 +39,7 @@ Mob 不替代 Gradle、Android Studio、Flutter、FVM、Xcode 或 DevEco。它�
 | 不同项目需要 API 27、34、35 或不同 NDK/JDK | 按项目读取 Gradle 需求，选择并临时注入相应工具链。 |
 | 新机器没有 SDK、ADB、Emulator 或系统镜像 | 查询官方可安装目录；工作流可在许可证确认后自动补齐缺失组件。 |
 | 系统已有 Android Studio 或外部 SDK | 自动发现；导入仅注册引用，绝不复制、覆盖或删除外部目录。 |
-| VS Code、CI、AI 需要稳定接口 | 人类模式提供清晰终端反馈；`--json` 和 `--json=events` 提供机器协议。 |
+| VS Code、CI 或脚本需要稳定接口 | 终端输出保持可读；`--json` 和 `--json=events` 提供结构化结果。 |
 | 不想污染全局环境变量 | 不持久化改写 `PATH`、`JAVA_HOME`、`ANDROID_HOME` 或 `ANDROID_SDK_ROOT`。 |
 
 ## 当前交付范围
@@ -157,9 +157,9 @@ mob run --mirror
 
 Android Emulator 使用官方窗口提供实时预览。真机的 `--mirror` 首次使用时会准备 Mob 内部的预览运行时；也可以将完整的 Windows x64 官方 `scrcpy` 压缩包解压到 `MOB_HOME/runtime/scrcpy`，Mob 检测到 `scrcpy.exe` 和同包依赖后会直接复用。
 
-## 为 AI 和自动化设计
+## 自动化接口
 
-Mob 的人类接口和机器接口来自同一份命令契约。先让 Agent 查询能力，再执行受控工作流：
+Mob 的终端接口与机器接口使用同一份命令契约。脚本、CI 和编辑器扩展可先查询命令能力，再执行受控工作流：
 
 ```powershell
 mob help run --format json
@@ -171,7 +171,7 @@ mob run --accept-licenses --json=events
 | 模式 | 适用对象 | stdout 契约 |
 | --- | --- | --- |
 | 默认文本 | 开发者终端 | 命令结果；进度和阶段信息写入 stderr。 |
-| `--json` | VS Code、CI、AI 的查询与有限工作流 | 一个终态 JSON 对象，包含 `schemaVersion`、`event`、`ok` 和 `data` 或 `error`。 |
+| `--json` | VS Code、CI 与脚本的查询和有限工作流 | 一个终态 JSON 对象，包含 `schemaVersion`、`event`、`ok` 和 `data` 或 `error`。 |
 | `--json=events` | build/run/debug/logs 等长任务 | JSON Lines 事件流，stdout 不混入进度条或 SDK 工具原始文本。 |
 
 机器调用可根据稳定错误码决定下一步，而不是解析面向人的字符串，例如：
