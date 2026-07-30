@@ -3,84 +3,9 @@ package app
 import (
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
-
-	"github.com/xy200303/MobBase/internal/platform/android"
 )
-
-type terminalProgress struct {
-	output      io.Writer
-	interactive bool
-	lastPercent int
-	nextBytes   int64
-	active      bool
-}
-
-func newTerminalProgress(output io.Writer) *terminalProgress {
-	progress := &terminalProgress{output: output, lastPercent: -1}
-	if file, ok := output.(*os.File); ok {
-		if info, err := file.Stat(); err == nil {
-			progress.interactive = info.Mode()&os.ModeCharDevice != 0
-		}
-	}
-	return progress
-}
-
-func (p *terminalProgress) event(kind, command string, data interface{}) {
-	if p == nil || p.output == nil || (kind != "started" && kind != "progress") {
-		return
-	}
-	p.finish()
-	phase := eventPhase(data)
-	if phase == "" {
-		phase = kind
-	}
-	fmt.Fprintf(p.output, "[mob] %s: %s\n", command, phaseLabel(phase))
-}
-
-func (p *terminalProgress) download(label string) func(android.DownloadProgress) {
-	return func(progress android.DownloadProgress) {
-		p.bytes(label, progress.Downloaded, progress.Total)
-	}
-}
-
-func (p *terminalProgress) bytes(label string, downloaded, total int64) {
-	if p == nil || p.output == nil {
-		return
-	}
-	percent := -1
-	if total > 0 {
-		percent = int(downloaded * 100 / total)
-		if percent > 100 {
-			percent = 100
-		}
-	}
-	if percent >= 0 && percent != 100 && percent == p.lastPercent {
-		return
-	}
-	if percent >= 0 && percent != 100 && p.lastPercent >= 0 && percent/5 == p.lastPercent/5 {
-		return
-	}
-	if percent < 0 && downloaded < p.nextBytes {
-		return
-	}
-	p.lastPercent = percent
-	if percent < 0 {
-		p.nextBytes = downloaded + 1024*1024
-	}
-	line := formatDownloadProgress(label, android.DownloadProgress{Downloaded: downloaded, Total: total}, percent)
-	if p.interactive {
-		fmt.Fprintf(p.output, "\r%s", line)
-		p.active = percent != 100
-		if percent == 100 {
-			fmt.Fprintln(p.output)
-		}
-		return
-	}
-	fmt.Fprintln(p.output, line)
-}
 
 type sdkManagerOutput struct {
 	output       io.Writer
@@ -157,33 +82,6 @@ func sdkManagerProgressPercent(line string) (int, bool) {
 		return 0, false
 	}
 	return value, true
-}
-
-func (p *terminalProgress) finish() {
-	if p != nil && p.active {
-		fmt.Fprintln(p.output)
-		p.active = false
-	}
-}
-
-func formatDownloadProgress(label string, progress android.DownloadProgress, percent int) string {
-	if percent < 0 {
-		return fmt.Sprintf("[mob] %s: %s downloaded", label, formatBytes(progress.Downloaded))
-	}
-	width := 20
-	filled := width * percent / 100
-	bar := strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
-	return fmt.Sprintf("[mob] %s [%s] %3d%% (%s / %s)", label, bar, percent, formatBytes(progress.Downloaded), formatBytes(progress.Total))
-}
-
-func formatBytes(size int64) string {
-	if size < 1024 {
-		return fmt.Sprintf("%d B", size)
-	}
-	if size < 1024*1024 {
-		return fmt.Sprintf("%.1f KiB", float64(size)/1024)
-	}
-	return fmt.Sprintf("%.1f MiB", float64(size)/(1024*1024))
 }
 
 func eventPhase(data interface{}) string {

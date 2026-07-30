@@ -65,14 +65,26 @@ func (r runtime) catalog(ctx context.Context, args []string) error {
 			continue
 		}
 		fmt.Fprintln(r.out, group.name+":")
+		rows := make([][]string, 0, len(group.items))
 		for _, item := range group.items {
-			fmt.Fprintf(r.out, "  %s\t%s\t%d\n", item.PackageID, item.Version, item.Size)
+			rows = append(rows, []string{item.PackageID, item.Version, strconv.FormatInt(item.Size, 10)})
+		}
+		if !r.terminal.Table([]string{"PACKAGE", "VERSION", "SIZE"}, rows) {
+			for _, row := range rows {
+				fmt.Fprintf(r.out, "  %s\t%s\t%s\n", row[0], row[1], row[2])
+			}
 		}
 	}
 	if options.Component == "" || options.Component == "java" {
 		fmt.Fprintln(r.out, "JDK:")
+		rows := make([][]string, 0, len(javaCatalog.Releases))
 		for _, release := range javaCatalog.Releases {
-			fmt.Fprintf(r.out, "  %d\t%s\t%s\n", release.Major, release.Version, release.SHA256)
+			rows = append(rows, []string{strconv.Itoa(release.Major), release.Version, release.SHA256})
+		}
+		if !r.terminal.Table([]string{"MAJOR", "VERSION", "SHA256"}, rows) {
+			for _, row := range rows {
+				fmt.Fprintf(r.out, "  %s\t%s\t%s\n", row[0], row[1], row[2])
+			}
 		}
 	}
 	return nil
@@ -121,8 +133,14 @@ func (r runtime) sdkAvailable(ctx context.Context, args []string) error {
 		fmt.Fprintln(r.out, "No matching Android SDK packages are available.")
 		return nil
 	}
+	rows := make([][]string, 0, len(items))
 	for _, item := range items {
-		fmt.Fprintf(r.out, "%s\t%s\t%d\t%s\n", item.PackageID, item.Version, item.Size, item.ChecksumAlgorithm)
+		rows = append(rows, []string{item.PackageID, item.Version, strconv.FormatInt(item.Size, 10), item.ChecksumAlgorithm})
+	}
+	if !r.terminal.Table([]string{"PACKAGE", "VERSION", "SIZE", "CHECKSUM"}, rows) {
+		for _, row := range rows {
+			fmt.Fprintf(r.out, "%s\t%s\t%s\t%s\n", row[0], row[1], row[2], row[3])
+		}
 	}
 	return nil
 }
@@ -300,8 +318,14 @@ func (r runtime) ndkAvailable(ctx context.Context, args []string) error {
 	if r.json {
 		return r.result("mob android ndk available", data)
 	}
+	rows := make([][]string, 0, len(items))
 	for _, item := range items {
-		fmt.Fprintf(r.out, "%s\t%s\t%d\t%s\n", item.PackageID, item.Version, item.Size, item.ChecksumAlgorithm)
+		rows = append(rows, []string{item.PackageID, item.Version, strconv.FormatInt(item.Size, 10), item.ChecksumAlgorithm})
+	}
+	if !r.terminal.Table([]string{"PACKAGE", "VERSION", "SIZE", "CHECKSUM"}, rows) {
+		for _, row := range rows {
+			fmt.Fprintf(r.out, "%s\t%s\t%s\t%s\n", row[0], row[1], row[2], row[3])
+		}
 	}
 	return nil
 }

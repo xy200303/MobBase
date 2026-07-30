@@ -16,7 +16,12 @@ import (
 	"github.com/xy200303/MobBase/internal/system"
 )
 
-func Install(ctx context.Context, destination, cache string, release Release) error {
+type DownloadProgress struct {
+	Downloaded int64
+	Total      int64
+}
+
+func Install(ctx context.Context, destination, cache string, release Release, report func(DownloadProgress)) error {
 	if len(release.SHA256) != 64 || !strings.HasSuffix(strings.ToLower(release.Archive), ".zip") {
 		return fmt.Errorf("Temurin JDK %s is not a supported ZIP archive for this host", release.Version)
 	}
@@ -25,7 +30,7 @@ func Install(ctx context.Context, destination, cache string, release Release) er
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	archive, err := download(ctx, cache, release)
+	archive, err := download(ctx, cache, release, report)
 	if err != nil {
 		return err
 	}
@@ -50,7 +55,7 @@ func Install(ctx context.Context, destination, cache string, release Release) er
 	return os.Rename(temporary, destination)
 }
 
-func download(ctx context.Context, cache string, release Release) (string, error) {
+func download(ctx context.Context, cache string, release Release, report func(DownloadProgress)) (string, error) {
 	if err := os.MkdirAll(cache, 0o755); err != nil {
 		return "", err
 	}
@@ -76,7 +81,9 @@ func download(ctx context.Context, cache string, release Release) (string, error
 	}
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
-	if _, err := io.Copy(temporary, response.Body); err != nil {
+	reader := &progressReader{Reader: response.Body, total: response.ContentLength, report: report}
+	reader.notify()
+	if _, err := io.Copy(temporary, reader); err != nil {
 		temporary.Close()
 		return "", err
 	}
@@ -90,6 +97,28 @@ func download(ctx context.Context, cache string, release Release) (string, error
 		return "", err
 	}
 	return archive, nil
+}
+
+type progressReader struct {
+	io.Reader
+	downloaded int64
+	total      int64
+	report     func(DownloadProgress)
+}
+
+func (r *progressReader) Read(buffer []byte) (int, error) {
+	count, err := r.Reader.Read(buffer)
+	r.downloaded += int64(count)
+	if count > 0 {
+		r.notify()
+	}
+	return count, err
+}
+
+func (r *progressReader) notify() {
+	if r.report != nil {
+		r.report(DownloadProgress{Downloaded: r.downloaded, Total: r.total})
+	}
 }
 
 func zipPrefix(path string) (string, error) {

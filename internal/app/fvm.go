@@ -63,12 +63,22 @@ func (r runtime) fvmList() error {
 		fmt.Fprintln(r.out, "No Mob-managed FVM version is installed.")
 		return nil
 	}
+	rows := make([][]string, 0, len(items))
 	for _, item := range items {
 		marker := ""
 		if item["current"].(bool) {
-			marker = "\tcurrent"
+			marker = "current"
 		}
-		fmt.Fprintf(r.out, "%s\t%s%s\n", item["version"], item["path"], marker)
+		rows = append(rows, []string{item["version"].(string), item["path"].(string), marker})
+	}
+	if !r.terminal.Table([]string{"VERSION", "PATH", "CURRENT"}, rows) {
+		for _, row := range rows {
+			marker := ""
+			if row[2] != "" {
+				marker = "\t" + row[2]
+			}
+			fmt.Fprintf(r.out, "%s\t%s%s\n", row[0], row[1], marker)
+		}
 	}
 	return nil
 }
@@ -195,12 +205,22 @@ func (r runtime) fvmAvailable(ctx context.Context, args []string) error {
 	if r.json {
 		return r.result("mob fvm available", data)
 	}
+	rows := make([][]string, 0, len(catalog.Releases))
 	for _, release := range catalog.Releases {
 		current := ""
 		if release.Current {
-			current = "\tcurrent"
+			current = "current"
 		}
-		fmt.Fprintf(r.out, "%s\t%s%s\n", release.Version, release.SHA256, current)
+		rows = append(rows, []string{release.Version, release.SHA256, current})
+	}
+	if !r.terminal.Table([]string{"VERSION", "SHA256", "CURRENT"}, rows) {
+		for _, row := range rows {
+			current := ""
+			if row[2] != "" {
+				current = "\t" + row[2]
+			}
+			fmt.Fprintf(r.out, "%s\t%s%s\n", row[0], row[1], current)
+		}
 	}
 	return nil
 }
@@ -304,7 +324,13 @@ func (r runtime) installFVM(ctx context.Context, version, command string, refres
 	}
 	defer os.RemoveAll(temporary)
 	source := filepath.Join(temporary, "source")
-	if err := fvm.DownloadAndExtract(ctx, *selected, source); err != nil {
+	var report func(fvm.DownloadProgress)
+	if callback := r.download("Downloading FVM"); callback != nil {
+		report = func(progress fvm.DownloadProgress) {
+			callback(progress.Downloaded, progress.Total)
+		}
+	}
+	if err := fvm.DownloadAndExtract(ctx, *selected, source, report); err != nil {
 		return state.FVMSDK{}, &codedError{Code: "MOB_SOURCE_INVALID", Message: err.Error(), Remediation: "Refresh the FVM catalog and retry; Mob rejected an unverified package archive."}
 	}
 	pubCache := filepath.Join(temporary, "pub-cache")

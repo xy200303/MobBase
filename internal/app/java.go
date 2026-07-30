@@ -105,7 +105,13 @@ func (r runtime) javaInstall(ctx context.Context, args []string) error {
 	if err := r.emit("started", "mob java install", true, map[string]string{"phase": "install", "version": release.Version}, nil); err != nil {
 		return err
 	}
-	if err := javaplatform.Install(ctx, destination, filepath.Join(r.home, "cache", "downloads"), *release); err != nil {
+	var report func(javaplatform.DownloadProgress)
+	if callback := r.download("Downloading Temurin JDK"); callback != nil {
+		report = func(progress javaplatform.DownloadProgress) {
+			callback(progress.Downloaded, progress.Total)
+		}
+	}
+	if err := javaplatform.Install(ctx, destination, filepath.Join(r.home, "cache", "downloads"), *release, report); err != nil {
 		return &codedError{Code: "MOB_COMMAND_FAILED", Message: err.Error(), Remediation: "Check access to the official Temurin archive and retry."}
 	}
 	config, err := r.store.Load()
@@ -140,8 +146,14 @@ func (r runtime) javaAvailable(ctx context.Context, args []string) error {
 	if r.json {
 		return r.result("mob java available", catalog)
 	}
+	rows := make([][]string, 0, len(catalog.Releases))
 	for _, release := range catalog.Releases {
-		fmt.Fprintf(r.out, "%d\t%s\t%s\n", release.Major, release.Version, release.SHA256)
+		rows = append(rows, []string{strconv.Itoa(release.Major), release.Version, release.SHA256})
+	}
+	if !r.terminal.Table([]string{"MAJOR", "VERSION", "SHA256"}, rows) {
+		for _, row := range rows {
+			fmt.Fprintf(r.out, "%s\t%s\t%s\n", row[0], row[1], row[2])
+		}
 	}
 	return nil
 }
@@ -163,12 +175,22 @@ func (r runtime) javaList(ctx context.Context) error {
 		fmt.Fprintln(r.out, "No JDK was found. Import one with mob java import --path <jdk-root> --name <name>.")
 		return nil
 	}
+	rows := make([][]string, 0, len(sdks))
 	for _, sdk := range sdks {
 		current := ""
 		if sdk.Name == config.Java.CurrentSDK {
-			current = "\tcurrent"
+			current = "current"
 		}
-		fmt.Fprintf(r.out, "%s\t%d\t%s\t%s%s\n", sdk.Name, sdk.Version, sdk.Ownership, sdk.Path, current)
+		rows = append(rows, []string{sdk.Name, strconv.Itoa(sdk.Version), string(sdk.Ownership), sdk.Path, current})
+	}
+	if !r.terminal.Table([]string{"NAME", "VERSION", "OWNERSHIP", "PATH", "CURRENT"}, rows) {
+		for _, row := range rows {
+			current := ""
+			if row[4] != "" {
+				current = "\t" + row[4]
+			}
+			fmt.Fprintf(r.out, "%s\t%s\t%s\t%s%s\n", row[0], row[1], row[2], row[3], current)
+		}
 	}
 	return nil
 }

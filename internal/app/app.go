@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/xy200303/MobBase/internal/app/ui"
 	"github.com/xy200303/MobBase/internal/home"
 	"github.com/xy200303/MobBase/internal/platform/android"
 	"github.com/xy200303/MobBase/internal/platform/ios"
@@ -58,7 +59,7 @@ type runtime struct {
 	out       io.Writer
 	err       io.Writer
 	events    *eventStream
-	terminal  *terminalProgress
+	terminal  *ui.UI
 }
 
 // Run is deliberately side-effect free for list, status, doctor and help.
@@ -69,7 +70,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return writeFailure(runtime{json: jsonOutput, eventMode: eventMode, out: stdout, err: stderr, events: &eventStream{}}, "mob", err)
 	}
-	run := runtime{home: homePath, store: state.New(homePath), json: jsonOutput, eventMode: eventMode, out: stdout, err: stderr, events: &eventStream{}, terminal: newTerminalProgress(stderr)}
+	run := runtime{home: homePath, store: state.New(homePath), json: jsonOutput, eventMode: eventMode, out: stdout, err: stderr, events: &eventStream{}, terminal: ui.New(stdout, stderr)}
 	if err := run.execute(ctx, args); err != nil {
 		return writeFailure(run, commandName(args), err)
 	}
@@ -1148,12 +1149,18 @@ func (r runtime) ndkList(args []string) error {
 		fmt.Fprintln(r.out, "No Android SDK found.")
 		return nil
 	}
+	rows := make([][]string, 0, len(entries))
 	for _, entry := range entries {
 		versions := strings.Join(entry.Versions, ", ")
 		if versions == "" {
 			versions = "none"
 		}
-		fmt.Fprintf(r.out, "%s\t%s\n", entry.SDK, versions)
+		rows = append(rows, []string{entry.SDK, versions})
+	}
+	if !r.terminal.Table([]string{"SDK", "VERSIONS"}, rows) {
+		for _, row := range rows {
+			fmt.Fprintf(r.out, "%s\t%s\n", row[0], row[1])
+		}
 	}
 	return nil
 }
@@ -1310,7 +1317,13 @@ func (r runtime) bootstrapManagedSDK(ctx context.Context, target android.SDK, ca
 	if err != nil {
 		return err
 	}
-	if err := android.BootstrapCommandLineTools(ctx, target.Path, cacheDirectory, item, config.Android.ProxyURL, r.terminal.download("Downloading Android command-line tools")); err != nil {
+	var report func(android.DownloadProgress)
+	if callback := r.download("Downloading Android command-line tools"); callback != nil {
+		report = func(progress android.DownloadProgress) {
+			callback(progress.Downloaded, progress.Total)
+		}
+	}
+	if err := android.BootstrapCommandLineTools(ctx, target.Path, cacheDirectory, item, config.Android.ProxyURL, report); err != nil {
 		return &codedError{Code: "MOB_COMMAND_FAILED", Message: err.Error(), Remediation: "Check Android repository access and retry; existing SDK installations are not modified."}
 	}
 	return nil
@@ -1378,12 +1391,22 @@ func (r runtime) deviceList(ctx context.Context, args []string) error {
 		fmt.Fprintln(r.out, "No mobile devices found.")
 		return nil
 	}
+	rows := make([][]string, 0, len(devices))
 	for _, device := range devices {
-		marker := " "
+		marker := ""
 		if device.ID == config.Device.DefaultID {
 			marker = "*"
 		}
-		fmt.Fprintf(r.out, "%s %s\t%s\t%s\t%s\n", marker, device.ID, device.Kind, device.State, device.Name)
+		rows = append(rows, []string{marker, device.ID, device.Kind, device.State, device.Name})
+	}
+	if !r.terminal.Table([]string{"DEFAULT", "ID", "KIND", "STATE", "NAME"}, rows) {
+		for _, row := range rows {
+			marker := row[0]
+			if marker == "" {
+				marker = " "
+			}
+			fmt.Fprintf(r.out, "%s %s\t%s\t%s\t%s\n", marker, row[1], row[2], row[3], row[4])
+		}
 	}
 	return nil
 }
@@ -1570,8 +1593,14 @@ func (r runtime) sdkList() error {
 		fmt.Fprintln(r.out, "No Android SDK found.")
 		return nil
 	}
+	rows := make([][]string, 0, len(sdks))
 	for _, sdk := range sdks {
-		fmt.Fprintf(r.out, "%s\t%s\t%s\n", sdk.Name, sdk.Ownership, sdk.Path)
+		rows = append(rows, []string{sdk.Name, string(sdk.Ownership), sdk.Path})
+	}
+	if !r.terminal.Table([]string{"NAME", "OWNERSHIP", "PATH"}, rows) {
+		for _, row := range rows {
+			fmt.Fprintf(r.out, "%s\t%s\t%s\n", row[0], row[1], row[2])
+		}
 	}
 	return nil
 }
@@ -2526,7 +2555,13 @@ func (r runtime) result(command string, data interface{}) error {
 
 func (r runtime) emit(kind, command string, ok bool, data interface{}, coded *codedError) error {
 	if !r.json {
-		r.terminal.event(kind, command, data)
+		if kind == "started" || kind == "progress" {
+			phase := eventPhase(data)
+			if phase == "" {
+				phase = kind
+			}
+			r.terminal.Phase(command, phaseLabel(phase))
+		}
 		return nil
 	}
 	if !r.eventMode && kind != "completed" && kind != "error" {
@@ -2551,6 +2586,15 @@ func (r runtime) interactiveOutput() io.Writer {
 		return nil
 	}
 	return r.err
+}
+
+// download returns the shared download-progress callback for human mode, or
+// nil in JSON mode so platform code never renders terminal UI there.
+func (r runtime) download(label string) func(downloaded, total int64) {
+	if r.json || r.terminal == nil {
+		return nil
+	}
+	return r.terminal.Download(label)
 }
 
 func (r runtime) sdkManagerOutput() io.Writer {

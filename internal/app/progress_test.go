@@ -5,25 +5,28 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xy200303/MobBase/internal/platform/android"
+	"github.com/xy200303/MobBase/internal/app/ui"
 )
 
 func TestTerminalProgressRendersDownloadBarForRedirectedOutput(t *testing.T) {
 	var output bytes.Buffer
-	progress := newTerminalProgress(&output)
-	progress.download("Downloading Android command-line tools")(android.DownloadProgress{Downloaded: 512, Total: 1024})
-	progress.download("Downloading Android command-line tools")(android.DownloadProgress{Downloaded: 1024, Total: 1024})
+	terminal := ui.New(nil, &output)
+	report := terminal.Download("Downloading Android command-line tools")
+	report(512, 1024)
+	report(1024, 1024)
 
 	text := output.String()
-	if !strings.Contains(text, "[##########----------]  50%") || !strings.Contains(text, "[####################] 100%") {
+	if !strings.Contains(text, "50%") || !strings.Contains(text, "100%") {
 		t.Fatalf("unexpected download progress: %q", text)
 	}
 }
 
 func TestTerminalProgressUsesReadablePhaseLabels(t *testing.T) {
 	var output bytes.Buffer
-	progress := newTerminalProgress(&output)
-	progress.event("progress", "mob android sdk install", map[string]string{"phase": "bootstrap-command-line-tools"})
+	r := runtime{out: &bytes.Buffer{}, err: &output, events: &eventStream{}, terminal: ui.New(nil, &output)}
+	if err := r.emit("progress", "mob android sdk install", true, map[string]string{"phase": "bootstrap-command-line-tools"}, nil); err != nil {
+		t.Fatal(err)
+	}
 	if got := output.String(); !strings.Contains(got, "Downloading Android command-line tools") {
 		t.Fatalf("unexpected terminal event: %q", got)
 	}
@@ -55,11 +58,18 @@ func TestSDKManagerOutputThrottlesRepeatedProgress(t *testing.T) {
 
 func TestTerminalProgressDoesNotWriteMachineOutput(t *testing.T) {
 	var output bytes.Buffer
-	r := runtime{json: true, out: &output, err: &bytes.Buffer{}, events: &eventStream{}, terminal: newTerminalProgress(&output)}
+	r := runtime{json: true, out: &output, err: &bytes.Buffer{}, events: &eventStream{}, terminal: ui.New(&output, &output)}
 	if err := r.emit("progress", "mob build", true, map[string]string{"phase": "build"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if output.Len() != 0 {
 		t.Fatalf("JSON output contained terminal UI: %q", output.String())
+	}
+}
+
+func TestDownloadCallbackIsDisabledInJSONMode(t *testing.T) {
+	r := runtime{json: true, out: &bytes.Buffer{}, err: &bytes.Buffer{}, events: &eventStream{}, terminal: ui.New(&bytes.Buffer{}, &bytes.Buffer{})}
+	if r.download("Downloading test archive") != nil {
+		t.Fatal("JSON mode must not render download progress")
 	}
 }

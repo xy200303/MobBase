@@ -61,8 +61,14 @@ func (r runtime) flutter(ctx context.Context, args []string) error {
 		fmt.Fprintln(r.out, "No Flutter or FVM launcher found on PATH.")
 		return nil
 	}
+	rows := make([][]string, 0, len(tools))
 	for _, tool := range tools {
-		fmt.Fprintf(r.out, "%s\t%s\n", tool.ID, tool.Path)
+		rows = append(rows, []string{tool.ID, tool.Path})
+	}
+	if !r.terminal.Table([]string{"ID", "PATH"}, rows) {
+		for _, row := range rows {
+			fmt.Fprintf(r.out, "%s\t%s\n", row[0], row[1])
+		}
 	}
 	return nil
 }
@@ -124,7 +130,13 @@ func (r runtime) installFlutter(ctx context.Context, version, command string) (s
 	if err := r.emit("progress", command, true, map[string]string{"phase": "download-flutter", "version": selected.Version}, nil); err != nil {
 		return state.FlutterSDK{}, "", err
 	}
-	if err := flutterplatform.Install(ctx, destination, filepath.Join(r.home, "cache", "downloads"), *selected); err != nil {
+	var report func(flutterplatform.DownloadProgress)
+	if callback := r.download("Downloading Flutter SDK"); callback != nil {
+		report = func(progress flutterplatform.DownloadProgress) {
+			callback(progress.Downloaded, progress.Total)
+		}
+	}
+	if err := flutterplatform.Install(ctx, destination, filepath.Join(r.home, "cache", "downloads"), *selected, report); err != nil {
 		return state.FlutterSDK{}, "", &codedError{Code: "MOB_COMMAND_FAILED", Message: err.Error(), Remediation: "Check Flutter release access and retry; existing installations are not modified."}
 	}
 	sdk := state.FlutterSDK{Version: selected.Version, Path: destination}
@@ -252,12 +264,22 @@ func (r runtime) flutterAvailable(ctx context.Context, args []string) error {
 	if r.json {
 		return r.result("mob flutter available", data)
 	}
+	rows := make([][]string, 0, len(catalog.Releases))
 	for _, release := range catalog.Releases {
 		current := ""
 		if release.Current {
-			current = "\tcurrent"
+			current = "current"
 		}
-		fmt.Fprintf(r.out, "%s\t%s\t%s%s\n", release.Version, release.Archive, release.SHA256, current)
+		rows = append(rows, []string{release.Version, release.Archive, release.SHA256, current})
+	}
+	if !r.terminal.Table([]string{"VERSION", "ARCHIVE", "SHA256", "CURRENT"}, rows) {
+		for _, row := range rows {
+			current := ""
+			if row[3] != "" {
+				current = "\t" + row[3]
+			}
+			fmt.Fprintf(r.out, "%s\t%s\t%s%s\n", row[0], row[1], row[2], current)
+		}
 	}
 	return nil
 }

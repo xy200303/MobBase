@@ -20,9 +20,13 @@ func (r runtime) startAndroidMirror(ctx context.Context, nativeID, command strin
 		if err := r.emit("progress", command, true, map[string]interface{}{"phase": "bootstrap-scrcpy", "version": release.Version, "size": release.Size}, nil); err != nil {
 			return "", err
 		}
-		if err := scrcpyplatform.Install(ctx, scrcpyplatform.RuntimeRoot(r.home), filepath.Join(r.home, "cache", "downloads"), release, func(progress scrcpyplatform.Progress) {
-			r.terminal.bytes("Downloading Android device preview", progress.Downloaded, progress.Total)
-		}); err != nil {
+		var report func(scrcpyplatform.Progress)
+		if callback := r.download("Downloading Android device preview"); callback != nil {
+			report = func(progress scrcpyplatform.Progress) {
+				callback(progress.Downloaded, progress.Total)
+			}
+		}
+		if err := scrcpyplatform.Install(ctx, scrcpyplatform.RuntimeRoot(r.home), filepath.Join(r.home, "cache", "downloads"), release, report); err != nil {
 			return "", &codedError{Code: "MOB_COMMAND_FAILED", Message: "Install Android device preview runtime: " + err.Error(), Remediation: "Check free disk space and access to the official Genymobile scrcpy release, then retry."}
 		}
 		client, found = scrcpyplatform.RuntimeExecutable(r.home)

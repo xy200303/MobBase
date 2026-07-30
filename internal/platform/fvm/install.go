@@ -14,10 +14,15 @@ import (
 	"time"
 )
 
+type DownloadProgress struct {
+	Downloaded int64
+	Total      int64
+}
+
 // DownloadAndExtract verifies the exact pub.dev package archive before
 // extracting regular files into destination. Symlinks and path escapes are
 // rejected because a package archive is untrusted until this point.
-func DownloadAndExtract(ctx context.Context, release Release, destination string) error {
+func DownloadAndExtract(ctx context.Context, release Release, destination string, report func(DownloadProgress)) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, release.ArchiveURL, nil)
 	if err != nil {
 		return fmt.Errorf("create FVM archive request: %w", err)
@@ -37,7 +42,9 @@ func DownloadAndExtract(ctx context.Context, release Release, destination string
 	downloadPath := download.Name()
 	defer os.Remove(downloadPath)
 	hash := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(download, hash), response.Body); err != nil {
+	progress := &progressReader{Reader: response.Body, total: response.ContentLength, report: report}
+	progress.notify()
+	if _, err := io.Copy(io.MultiWriter(download, hash), progress); err != nil {
 		download.Close()
 		return fmt.Errorf("save FVM archive: %w", err)
 	}
@@ -102,6 +109,28 @@ func DownloadAndExtract(ctx context.Context, release Release, destination string
 		return fmt.Errorf("FVM archive does not contain pubspec.yaml")
 	}
 	return nil
+}
+
+type progressReader struct {
+	io.Reader
+	downloaded int64
+	total      int64
+	report     func(DownloadProgress)
+}
+
+func (r *progressReader) Read(buffer []byte) (int, error) {
+	count, err := r.Reader.Read(buffer)
+	r.downloaded += int64(count)
+	if count > 0 {
+		r.notify()
+	}
+	return count, err
+}
+
+func (r *progressReader) notify() {
+	if r.report != nil {
+		r.report(DownloadProgress{Downloaded: r.downloaded, Total: r.total})
+	}
 }
 
 func safeArchivePath(root, name string) (string, error) {
