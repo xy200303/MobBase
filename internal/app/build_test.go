@@ -13,7 +13,7 @@ import (
 )
 
 func TestParseBuildForwardsArgumentsAfterSeparator(t *testing.T) {
-	args, jsonOutput := takeJSON([]string{"build", "--json", "--platform", "android", "--no-install", "--accept-licenses", "--", "gradlew.bat", "assembleDebug", "--console", "plain"})
+	args, jsonOutput := takeJSON([]string{"build", "--json", "--platform", "android", "--force", "--no-install", "--accept-licenses", "--", "gradlew.bat", "assembleDebug", "--console", "plain"})
 	if !jsonOutput {
 		t.Fatal("expected Mob JSON flag before the separator")
 	}
@@ -22,8 +22,19 @@ func TestParseBuildForwardsArgumentsAfterSeparator(t *testing.T) {
 		t.Fatalf("parse build: %v", err)
 	}
 	want := []string{"gradlew.bat", "assembleDebug", "--console", "plain"}
-	if options.Platform != "android" || !options.NoInstall || !options.AcceptLicenses || !reflect.DeepEqual(options.Command, want) {
+	if options.Platform != "android" || !options.Force || !options.NoInstall || !options.AcceptLicenses || !reflect.DeepEqual(options.Command, want) {
 		t.Fatalf("unexpected options: %#v", options)
+	}
+}
+
+func TestSelectBuildPlatformForceAllowsDirectAndroidCommand(t *testing.T) {
+	info := &project.Info{Kind: project.KindKotlinMultiplatform}
+	platform, err := selectBuildPlatformWithForce(info, "android", true)
+	if err != nil || platform != "android" {
+		t.Fatalf("platform = %q, err = %v", platform, err)
+	}
+	if _, err := selectBuildPlatform(info, "android"); err == nil {
+		t.Fatal("expected undeclared Android target to be rejected without --force")
 	}
 }
 

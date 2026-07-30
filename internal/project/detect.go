@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -111,17 +112,27 @@ func isKotlinMultiplatform(root string) (bool, []string, error) {
 	if err != nil {
 		return false, nil, err
 	}
-	if !strings.Contains(content, "multiplatform") && !strings.Contains(content, "Multiplatform") {
+	lowerContent := strings.ToLower(content)
+	if !strings.Contains(lowerContent, "multiplatform") && !strings.Contains(lowerContent, "kuikly") {
 		return false, nil, nil
 	}
 	targets := make([]string, 0, 2)
-	if strings.Contains(content, "androidTarget") || strings.Contains(content, "android()") {
+	if declaresAndroidTarget(content) {
 		targets = append(targets, "android")
 	}
 	if strings.Contains(content, "ios") || strings.Contains(content, "iOS") {
 		targets = append(targets, "ios")
 	}
 	return true, targets, nil
+}
+
+func declaresAndroidTarget(content string) bool {
+	return strings.Contains(content, "androidTarget") ||
+		strings.Contains(content, "android()") ||
+		strings.Contains(content, "com.android.application") ||
+		strings.Contains(content, "com.android.library") ||
+		strings.Contains(content, "libs.plugins.android.application") ||
+		strings.Contains(content, "libs.plugins.android.library")
 }
 
 func isAndroid(root string) bool {
@@ -197,14 +208,69 @@ func hasDirectory(root, name string) bool {
 func readBuildScripts(root string) (string, error) {
 	var content strings.Builder
 	for _, name := range []string{"build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"} {
-		data, err := os.ReadFile(filepath.Join(root, name))
-		if os.IsNotExist(err) {
-			continue
+		if err := appendBuildScript(&content, filepath.Join(root, name)); err != nil {
+			return "", err
 		}
-		if err != nil {
-			return "", fmt.Errorf("read %s: %w", name, err)
+	}
+	modules, err := includedGradleModules(root)
+	if err != nil {
+		return "", err
+	}
+	for _, module := range modules {
+		for _, name := range []string{"build.gradle", "build.gradle.kts"} {
+			if err := appendBuildScript(&content, filepath.Join(root, module, name)); err != nil {
+				return "", err
+			}
 		}
-		content.Write(data)
 	}
 	return content.String(), nil
+}
+
+func appendBuildScript(content *strings.Builder, path string) error {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	content.Write(data)
+	return nil
+}
+
+var (
+	includeCallPattern  = regexp.MustCompile(`(?s)\binclude\s*\((.*?)\)`)
+	includeLinePattern  = regexp.MustCompile(`(?m)^\s*include\s+(.+)$`)
+	gradleModulePattern = regexp.MustCompile(`["'](:[A-Za-z0-9_.-]+)["']`)
+)
+
+// includedGradleModules returns conventional module directories declared by
+// Gradle's include syntax. Custom projectDir mappings remain Gradle-owned and
+// are intentionally not guessed by source inspection.
+func includedGradleModules(root string) ([]string, error) {
+	var settings strings.Builder
+	for _, name := range []string{"settings.gradle", "settings.gradle.kts"} {
+		if err := appendBuildScript(&settings, filepath.Join(root, name)); err != nil {
+			return nil, err
+		}
+	}
+	seen := make(map[string]struct{})
+	modules := make([]string, 0)
+	addMatches := func(value string) {
+		for _, match := range gradleModulePattern.FindAllStringSubmatch(value, -1) {
+			module := filepath.Join(strings.Split(strings.TrimPrefix(match[1], ":"), ":")...)
+			if _, exists := seen[module]; exists {
+				continue
+			}
+			seen[module] = struct{}{}
+			modules = append(modules, module)
+		}
+	}
+	for _, match := range includeCallPattern.FindAllStringSubmatch(settings.String(), -1) {
+		addMatches(match[1])
+	}
+	for _, match := range includeLinePattern.FindAllStringSubmatch(settings.String(), -1) {
+		addMatches(match[1])
+	}
+	return modules, nil
 }

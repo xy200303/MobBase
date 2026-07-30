@@ -16,6 +16,7 @@ import (
 type buildOptions struct {
 	Platform       string
 	Command        []string
+	Force          bool
 	NoInstall      bool
 	AcceptLicenses bool
 }
@@ -29,10 +30,20 @@ func (r runtime) build(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	if options.Force && (options.Platform != "android" || len(options.Command) == 0) {
+		return &codedError{Code: "MOB_INVALID_ARGUMENT", Message: "--force requires --platform android and an official command after --.", Remediation: "Use mob build --force --platform android -- <gradle-wrapper> <task>."}
+	}
+	if currentProject == nil && options.Force {
+		root, rootErr := os.Getwd()
+		if rootErr != nil {
+			return fmt.Errorf("resolve project directory: %w", rootErr)
+		}
+		currentProject = &project.Info{Root: root, Kind: project.KindAndroid, Targets: []string{"android"}}
+	}
 	if currentProject == nil {
 		return &codedError{Code: "MOB_PROJECT_UNRECOGNIZED", Message: "The current directory is not a supported mobile project.", Remediation: "Run mob status, or pass a supported project directory to your terminal."}
 	}
-	platform, err := selectBuildPlatform(currentProject, options.Platform)
+	platform, err := selectBuildPlatformWithForce(currentProject, options.Platform, options.Force)
 	if err != nil {
 		return err
 	}
@@ -42,7 +53,7 @@ func (r runtime) build(ctx context.Context, args []string) error {
 	if platform != "android" {
 		return &codedError{Code: "MOB_PLATFORM_NOT_SUPPORTED", Message: "Android is the only build platform implemented in this Mob release.", Remediation: "Choose --platform android for a project that declares an Android target."}
 	}
-	if currentProject.Kind != project.KindAndroid && currentProject.Kind != project.KindFlutter {
+	if currentProject.Kind != project.KindAndroid && currentProject.Kind != project.KindFlutter && currentProject.Kind != project.KindKotlinMultiplatform && !(options.Force && len(options.Command) > 0) {
 		return &codedError{Code: "MOB_RUNNER_UNAVAILABLE", Message: "The " + string(currentProject.Kind) + " build adapter is not available yet.", Remediation: "Use the project's official runner for now, or build a native Android Gradle project with mob build."}
 	}
 	sdk, requirements, err := r.prepareAndroidSDK(ctx, currentProject.Root, "mob build", false, options.NoInstall, options.AcceptLicenses)
@@ -153,6 +164,9 @@ func parseBuild(args []string) (buildOptions, error) {
 			}
 			options.Platform = args[1]
 			args = args[2:]
+		case "--force":
+			options.Force = true
+			args = args[1:]
 		case "--no-install":
 			options.NoInstall = true
 			args = args[1:]
@@ -167,13 +181,24 @@ func parseBuild(args []string) (buildOptions, error) {
 }
 
 func selectBuildPlatform(info *project.Info, requested string) (string, error) {
+	return selectBuildPlatformWithForce(info, requested, false)
+}
+
+func selectBuildPlatformWithForce(info *project.Info, requested string, force bool) (string, error) {
 	if requested != "" {
 		for _, target := range info.Targets {
 			if target == requested {
 				return requested, nil
 			}
 		}
-		return "", &codedError{Code: "MOB_PLATFORM_NOT_SUPPORTED", Message: "The current project does not declare a " + requested + " target.", Remediation: "Run mob status and choose a declared platform."}
+		if force {
+			return requested, nil
+		}
+		article := "a"
+		if requested == "android" || requested == "ios" {
+			article = "an"
+		}
+		return "", &codedError{Code: "MOB_PLATFORM_NOT_SUPPORTED", Message: "The current project does not declare " + article + " " + requested + " target.", Remediation: "Run mob status and choose a declared platform, or use --force --platform android -- <official-command> to run a verified Gradle command."}
 	}
 	if len(info.Targets) == 1 {
 		return info.Targets[0], nil

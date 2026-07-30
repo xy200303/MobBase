@@ -51,6 +51,52 @@ func TestDetectKotlinMultiplatformBeforeAndroid(t *testing.T) {
 	}
 }
 
+func TestDetectKotlinMultiplatformTargetsFromIncludedModule(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "settings.gradle.kts"), "rootProject.name = \"sample\"\ninclude(\":shared\", \":feature:ui\")")
+	writeFile(t, filepath.Join(root, "build.gradle.kts"), "plugins { alias(libs.plugins.android.application) apply false }")
+	writeFile(t, filepath.Join(root, "shared", "build.gradle.kts"), "plugins { kotlin(\"multiplatform\") }\nkotlin { androidTarget(); iosArm64() }")
+	writeFile(t, filepath.Join(root, "feature", "ui", "build.gradle.kts"), "plugins {}")
+
+	info, err := Detect(root)
+	if err != nil {
+		t.Fatalf("detect: %v", err)
+	}
+	if info == nil || info.Kind != KindKotlinMultiplatform || len(info.Targets) != 2 || info.Targets[0] != "android" || info.Targets[1] != "ios" {
+		t.Fatalf("unexpected project: %#v", info)
+	}
+}
+
+func TestDetectKotlinMultiplatformTargetsFromGroovyIncludedModule(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "settings.gradle"), "include ':shared'")
+	writeFile(t, filepath.Join(root, "shared", "build.gradle"), "plugins { id 'org.jetbrains.kotlin.multiplatform' }\nkotlin { androidTarget() }")
+
+	info, err := Detect(root)
+	if err != nil {
+		t.Fatalf("detect: %v", err)
+	}
+	if info == nil || info.Kind != KindKotlinMultiplatform || len(info.Targets) != 1 || info.Targets[0] != "android" {
+		t.Fatalf("unexpected project: %#v", info)
+	}
+}
+
+func TestDetectKuiklyProjectWithIncludedAndroidApp(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "settings.gradle.kts"), "include(\":shared\", \":androidApp\")")
+	writeFile(t, filepath.Join(root, "build.gradle.kts"), "plugins {}")
+	writeFile(t, filepath.Join(root, "shared", "build.gradle.kts"), "plugins { id(\"com.tencent.kuikly-open.kuikly\") }")
+	writeFile(t, filepath.Join(root, "androidApp", "build.gradle.kts"), "plugins { id(\"com.android.application\") }")
+
+	info, err := Detect(root)
+	if err != nil {
+		t.Fatalf("detect: %v", err)
+	}
+	if info == nil || info.Kind != KindKotlinMultiplatform || len(info.Targets) != 1 || info.Targets[0] != "android" {
+		t.Fatalf("unexpected project: %#v", info)
+	}
+}
+
 func TestDetectNativeAndroid(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "settings.gradle"), "rootProject.name = 'sample'")

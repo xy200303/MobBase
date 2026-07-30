@@ -85,6 +85,9 @@ func (r runtime) execute(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		return r.help(args[1:])
 	}
+	if helpPath, requested := inlineHelpPath(args); requested {
+		return r.help(helpPath)
+	}
 	switch args[0] {
 	case "version", "--version", "-V":
 		if len(args) != 1 {
@@ -132,6 +135,17 @@ func (r runtime) execute(ctx context.Context, args []string) error {
 	default:
 		return invalidCommand(strings.Join(args, " "))
 	}
+}
+
+func inlineHelpPath(args []string) ([]string, bool) {
+	path := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			return path, true
+		}
+		path = append(path, arg)
+	}
+	return nil, false
 }
 
 func isVersionCommand(args []string) bool {
@@ -534,7 +548,7 @@ func (r runtime) doctorAs(command string, args []string) error {
 		checks = append(checks, androidDeviceToolChecks(selected)...)
 	}
 	projectReady := true
-	if currentProject != nil && (currentProject.Kind == project.KindAndroid || currentProject.Kind == project.KindFlutter) && targetDeclared(currentProject, "android") {
+	if currentProject != nil && (currentProject.Kind == project.KindAndroid || currentProject.Kind == project.KindFlutter || currentProject.Kind == project.KindKotlinMultiplatform) && targetDeclared(currentProject, "android") {
 		requirements, requirementsErr := project.AndroidRequirementsFor(currentProject.Root)
 		matching := requirementsErr == nil
 		if matching {
@@ -544,11 +558,19 @@ func (r runtime) doctorAs(command string, args []string) error {
 		fix := ""
 		if !matching {
 			fix = "Run mob build --accept-licenses to prepare android:managed, or install the declared Android components."
+			for index := range checks {
+				if checks[index].ID == "android-sdk" {
+					checks[index].Status = "missing"
+					checks[index].Detail = "No installed SDK satisfies project requirements: " + detail
+					checks[index].Fix = fix
+					break
+				}
+			}
 		}
 		checks = append(checks, check{ID: "android-project-requirements", Label: "Android project requirements", Status: status(matching), Required: true, Detail: detail, Fix: fix})
 		projectReady = matching
 	}
-	if currentProject != nil && currentProject.Kind == project.KindAndroid {
+	if currentProject != nil && (currentProject.Kind == project.KindAndroid || currentProject.Kind == project.KindKotlinMultiplatform) {
 		_, _, wrapperErr := buildCommand(currentProject.Root, nil)
 		detail, fix := "Gradle Wrapper is available.", ""
 		if wrapperErr != nil {
@@ -1838,6 +1860,9 @@ func (r runtime) help(args []string) error {
 	if !known {
 		return invalidCommand("mob help " + strings.Join(pathArgs, " "))
 	}
+	if path == "mob" && (r.json || format == helpFormatJSON) {
+		data.Subcommands = topLevelHelpContracts()
+	}
 	if r.json || format == helpFormatJSON {
 		jsonRuntime := r
 		jsonRuntime.json = true
@@ -2033,6 +2058,18 @@ type helpResponse struct {
 	Examples            []string       `json:"examples"`
 	Related             []string       `json:"related"`
 	Errors              []string       `json:"errors"`
+	Subcommands         []helpResponse `json:"subcommands,omitempty"`
+}
+
+func topLevelHelpContracts() []helpResponse {
+	commands := []string{"version", "status", "doctor", "catalog", "build", "run", "debug", "test", "logs", "release", "env", "home", "support", "java", "flutter", "fvm", "android", "ios", "harmony", "device"}
+	contracts := make([]helpResponse, 0, len(commands))
+	for _, command := range commands {
+		if contract, known := helpData("mob " + command); known {
+			contracts = append(contracts, contract)
+		}
+	}
+	return contracts
 }
 
 func helpData(path string) (helpResponse, bool) {
@@ -2381,10 +2418,10 @@ func helpData(path string) (helpResponse, bool) {
 		base.Related = []string{"mob status", "mob android sdk import", "mob support bundle"}
 		base.Errors = []string{"MOB_INVALID_COMMAND"}
 	case "mob build":
-		base.Usage = "mob build [--platform <id>] [--no-install] [--accept-licenses] [-- <official-command> [args...]] [--json]"
-		base.Description = "Build the current project through its supported official runner. Native Android uses the Gradle Wrapper; Flutter Android uses flutter build apk; native iOS invokes xcodebuild on macOS."
+		base.Usage = "mob build [--platform <id>] [--force --platform android -- <official-command> [args...]] [--no-install] [--accept-licenses] [-- <official-command> [args...]] [--json]"
+		base.Description = "Build the current project through its supported official runner. Native Android and Android KMP use the Gradle Wrapper; Flutter Android uses flutter build apk; native iOS invokes xcodebuild on macOS. --force permits an explicit Android Gradle command when project detection is incomplete."
 		base.SideEffects = "runs the project build and creates normal project build outputs"
-		base.Examples = []string{"mob build", "mob build --accept-licenses", "mob build --platform android -- gradlew.bat assembleRelease", "mob build --platform ios"}
+		base.Examples = []string{"mob build", "mob build --accept-licenses", "mob build --platform android -- gradlew.bat assembleRelease", "mob build --force --platform android -- .\\gradlew.bat :androidApp:assembleDebug", "mob build --platform ios"}
 		base.Related = []string{"mob status", "mob doctor", "mob android sdk use"}
 		base.Errors = []string{"MOB_PROJECT_UNRECOGNIZED", "MOB_PLATFORM_REQUIRED", "MOB_PLATFORM_NOT_SUPPORTED", "MOB_TOOLCHAIN_MISSING", "MOB_RUNNER_UNAVAILABLE", "MOB_COMMAND_FAILED"}
 	case "mob run":
@@ -2700,7 +2737,7 @@ func writeFailure(run runtime, command string, err error) int {
 	return 1
 }
 func invalidCommand(command string) error {
-	return &codedError{Code: "MOB_INVALID_COMMAND", Message: "Unknown or invalid command: " + command, Remediation: "Run mob help --json for the command contract."}
+	return &codedError{Code: "MOB_INVALID_COMMAND", Message: "Unknown or invalid command: " + command, Remediation: "Run mob help for available commands, or mob help <command> for command-specific usage; use --json for machine output."}
 }
 func importOptions(args []string) (string, string, error) {
 	var path, name string

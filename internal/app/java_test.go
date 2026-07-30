@@ -44,6 +44,29 @@ func TestJavaEnvironmentIsProcessScoped(t *testing.T) {
 	}
 }
 
+func TestJavaHomesInListsOnlyDirectJDKDirectories(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"liberica-17", "temurin-21"} {
+		if err := os.Mkdir(filepath.Join(root, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "not-a-jdk"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	homes := javaHomesIn(root, "")
+	if len(homes) != 2 || homes[0] != filepath.Join(root, "liberica-17") || homes[1] != filepath.Join(root, "temurin-21") {
+		t.Fatalf("unexpected homes: %#v", homes)
+	}
+}
+
+func TestNextDiscoveredJavaNameAvoidsCollisions(t *testing.T) {
+	existing := []state.JavaSDK{{Name: "discovered-java-17"}, {Name: "discovered-java-17-2"}}
+	if name := nextDiscoveredJavaName(existing, 17); name != "discovered-java-17-3" {
+		t.Fatalf("name = %q", name)
+	}
+}
+
 func TestJavaRemoveDeletesManagedSDK(t *testing.T) {
 	home := t.TempDir()
 	path := filepath.Join(home, "toolchains", "java", "17.0.14+7")

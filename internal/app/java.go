@@ -280,7 +280,7 @@ func discoverJava(ctx context.Context, config state.Config) ([]state.JavaSDK, er
 	for _, sdk := range result {
 		seen[normalizedPath(sdk.Path)] = true
 	}
-	for _, candidate := range []string{os.Getenv("JAVA_HOME"), javaHomeFromPath()} {
+	for _, candidate := range javaDiscoveryCandidates() {
 		if candidate == "" || seen[normalizedPath(candidate)] {
 			continue
 		}
@@ -288,10 +288,7 @@ func discoverJava(ctx context.Context, config state.Config) ([]state.JavaSDK, er
 		if err != nil {
 			continue
 		}
-		name := "system-java"
-		if os.Getenv("JAVA_HOME") == candidate {
-			name = "java-home"
-		}
+		name := nextDiscoveredJavaName(result, version)
 		result = append(result, state.JavaSDK{Name: name, Version: version, Path: candidate, Ownership: state.OwnershipDiscovered})
 		seen[normalizedPath(candidate)] = true
 	}
@@ -304,7 +301,80 @@ func javaHomeFromPath() string {
 	if !found {
 		return ""
 	}
+	if resolved, err := filepath.EvalSymlinks(java); err == nil {
+		java = resolved
+	}
 	return filepath.Dir(filepath.Dir(java))
+}
+
+func javaDiscoveryCandidates() []string {
+	candidates := []string{os.Getenv("JAVA_HOME"), javaHomeFromPath()}
+	if userHome, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, javaHomesIn(filepath.Join(userHome, ".jdks"), "")...)
+	}
+	switch goruntime.GOOS {
+	case "windows":
+		for _, root := range uniquePaths([]string{os.Getenv("ProgramFiles"), os.Getenv("ProgramW6432"), os.Getenv("ProgramFiles(x86)")}) {
+			for _, vendor := range []string{"Java", "Eclipse Adoptium", "Microsoft"} {
+				candidates = append(candidates, javaHomesIn(filepath.Join(root, vendor), "")...)
+			}
+		}
+	case "darwin":
+		candidates = append(candidates, javaHomesIn("/Library/Java/JavaVirtualMachines", filepath.Join("Contents", "Home"))...)
+	default:
+		candidates = append(candidates, javaHomesIn("/usr/lib/jvm", "")...)
+	}
+	return uniquePaths(candidates)
+}
+
+func javaHomesIn(root, suffix string) []string {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	homes := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		homes = append(homes, filepath.Join(root, entry.Name(), suffix))
+	}
+	return homes
+}
+
+func uniquePaths(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	result := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if strings.TrimSpace(path) == "" {
+			continue
+		}
+		normalized := normalizedPath(path)
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		result = append(result, path)
+	}
+	return result
+}
+
+func nextDiscoveredJavaName(existing []state.JavaSDK, version int) string {
+	base := "discovered-java-" + strconv.Itoa(version)
+	name := base
+	for suffix := 2; ; suffix++ {
+		found := false
+		for _, sdk := range existing {
+			if sdk.Name == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return name
+		}
+		name = fmt.Sprintf("%s-%d", base, suffix)
+	}
 }
 
 func javaVersion(ctx context.Context, home string) (int, error) {
