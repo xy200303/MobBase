@@ -156,7 +156,13 @@ mob device list [--platform android|ios]
                                         统一列出 ADB Android 真机/模拟器，以及 macOS 上的 Xcode iOS Simulator
 mob device use <platform:native-id>     选择默认运行设备
 mob device open android:<id>            唤醒 Android 模拟器，或自动准备 Mob 真机预览运行时并打开实时窗口
-mob device screenshot android:<id> [--output <path>]
+mob device screenshot [android:<id>] [--output|--out <path>]
+mob device ui-tree [--device android:<id>] --json
+mob device wait --boot|--idle
+mob device input tap <x> <y>
+mob device input swipe <x1> <y1> <x2> <y2> --duration <ms>
+mob device input text <value>
+mob device input key <keycode>
                                         通过 ADB 保存真机或模拟器 PNG 截图
 mob device record android:<id> [--output <path>] [--seconds <1-180>]
                                         通过 ADB 录制并保存 MP4

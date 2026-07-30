@@ -203,13 +203,16 @@ mob run --device android:emulator-5554 -- .\gradlew.bat installDebug
 | 查看当前 Mob 版本 | `mob --version` 或 `mob version` |
 | 查看本机总览 | `mob status` |
 | 诊断 Android 环境 | `mob doctor` 或 `mob android doctor` |
+| 诊断并补齐当前项目环境 | `mob doctor --fix --accept-licenses` |
 | 查看官方可安装目录 | `mob catalog --platform android` |
 | 管理 SDK 组件 | `mob android sdk list` / `available` / `install` / `inspect` |
 | 管理 NDK | `mob android ndk list --sdk managed` / `available` / `install` |
 | 管理模拟器 | `mob android emulator list` / `create` / `start` |
 | 选择或查看设备 | `mob device list` / `mob device use <platform:native-id>` |
+| UI 自动化验证 | `mob device screenshot` / `mob device ui-tree --json` / `mob device wait --idle` / `mob device input tap <x> <y>` |
 | 构建、运行、测试、调试 | `mob build` / `mob run` / `mob test` / `mob debug` |
 | 查看项目日志 | `mob logs --follow --json=events` |
+| 按包名查看日志 | `mob logs --app <package>` |
 | 生成发布产物 | `mob release --platform android --artifact aab` |
 | 获取完整命令契约 | `mob help --format markdown` |
 
