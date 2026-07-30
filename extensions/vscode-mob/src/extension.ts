@@ -108,6 +108,10 @@ async function createAndroidProject(client: MobClient, output: vscode.OutputChan
   if (!name) {
     return;
   }
+  const parent = await selectProjectParent(root);
+  if (!parent) {
+    return;
+  }
   const template = await vscode.window.showQuickPick([
     { label: "Kotlin + Compose", language: "kotlin", ui: "compose" },
     { label: "Kotlin + Views", language: "kotlin", ui: "views" },
@@ -126,7 +130,8 @@ async function createAndroidProject(client: MobClient, output: vscode.OutputChan
   }
   startWorkflow(client, output, ["android", "create", name, "--language", template.language, "--ui", template.ui, "--min-sdk", minSdk], {
     title: "Create Android Project",
-    onCompleted: () => offerOpenProject(path.join(root, name)),
+    cwd: parent,
+    onCompleted: () => offerOpenProject(path.join(parent, name)),
   });
 }
 
@@ -144,6 +149,10 @@ async function createFlutterProject(client: MobClient, output: vscode.OutputChan
   if (!name) {
     return;
   }
+  const parent = await selectProjectParent(root);
+  if (!parent) {
+    return;
+  }
   const target = await vscode.window.showQuickPick([
     { label: "Android", platforms: "android" },
     { label: "Android and iOS", platforms: "android,ios" },
@@ -153,8 +162,33 @@ async function createFlutterProject(client: MobClient, output: vscode.OutputChan
   }
   startWorkflow(client, output, ["flutter", "create", name, "--platforms", target.platforms], {
     title: "Create Flutter Project",
-    onCompleted: () => offerOpenProject(path.join(root, name)),
+    cwd: parent,
+    onCompleted: () => offerOpenProject(path.join(parent, name)),
   });
+}
+
+async function selectProjectParent(workspaceRoot: string): Promise<string | undefined> {
+  const choice = await vscode.window.showQuickPick([
+    { label: "Current workspace", description: workspaceRoot, folder: workspaceRoot },
+    { label: "Choose another folder...", description: "Select the parent directory for the new project" },
+  ], {
+    title: "Project location",
+    placeHolder: "Choose the parent directory for the new project",
+  });
+  if (!choice) {
+    return undefined;
+  }
+  if (choice.folder) {
+    return choice.folder;
+  }
+  const folder = await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: "Use This Folder",
+    title: "Choose project location",
+  });
+  return folder?.[0]?.fsPath;
 }
 
 function offerOpenProject(projectPath: string): void {

@@ -235,7 +235,7 @@ mob android sdk use managed
 mob android create notes --language kotlin --ui compose --min-sdk 24
 ```
 
-Android 官方没有覆盖所有工程形态的统一脚手架 CLI，因此 Mob 使用随版本发布、可审计的 Mob 标准 Gradle 模板。当前 Android CLI 生成普通的 Android Gradle 工程、标准目录、Kotlin/Java Activity 与可选最小 SDK，并使用本机官方 Gradle 命令生成 Gradle Wrapper；本机没有 Gradle 时会在写入前报错。不会生成 `mob.yaml`、运行时依赖或私有构建插件。生成后项目由 Gradle 和 Android 工具链正常维护，Mob 仅在后续 `build/run/debug` 时识别并提供环境。
+Android 官方没有覆盖所有工程形态的统一脚手架 CLI，因此 Mob 使用随版本发布、可审计的 Mob 标准 Gradle 模板。当前 Android CLI 生成普通的 Android Gradle 工程、标准目录、Kotlin/Java Activity 与可选最小 SDK，并使用系统 Gradle 或 Mob 安装的、经官方 SHA-256 校验的 Gradle 发行版生成项目 Gradle Wrapper。缺失时 Gradle 安装到 `MOB_HOME/toolchains/gradle` 并注册到用户命令路径，以供其他项目复用；Windows 安全更新用户 PATH，不使用可能截断 PATH 的 `setx`。生成后的项目始终使用自身 Wrapper。不会生成 `mob.yaml`、运行时依赖或私有构建插件。生成后项目由 Gradle 和 Android 工具链正常维护，Mob 仅在后续 `build/run/debug` 时识别并提供环境。
 
 Compose 模板仅接受 Kotlin，且会生成匹配 Kotlin 版本的 Compose 编译插件配置；Java 模板只能使用 Views，避免产生不可构建的项目组合。
 

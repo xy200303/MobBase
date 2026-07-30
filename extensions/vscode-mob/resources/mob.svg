@@ -1,13 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">Mob</title>
-  <desc id="desc">A mobile device with a command prompt for Mob mobile toolchains.</desc>
-  <rect width="512" height="512" rx="112" fill="#102A43"/>
-  <path d="M160 106h192c24 0 44 20 44 44v212c0 24-20 44-44 44H160c-24 0-44-20-44-44V150c0-24 20-44 44-44Z" fill="#0B1F33" stroke="#E5F3F1" stroke-width="18"/>
-  <path d="M210 106h92v18h-92z" fill="#E5F3F1"/>
-  <circle cx="256" cy="374" r="11" fill="#E5F3F1"/>
-  <path d="m192 224 48 40-48 40" fill="none" stroke="#24C6B5" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M272 304h58" fill="none" stroke="#FFB547" stroke-width="24" stroke-linecap="round"/>
-  <path d="M368 164v92" fill="none" stroke="#FFB547" stroke-width="18" stroke-linecap="round"/>
-  <path d="M322 210h92" fill="none" stroke="#FFB547" stroke-width="18" stroke-linecap="round"/>
-  <circle cx="368" cy="210" r="15" fill="#FFB547"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="6.5" y="2.5" width="11" height="19" rx="2"/>
+  <path d="m9.5 10 2 2-2 2"/>
+  <path d="M13.5 14h1.5"/>
+  <path d="M10.5 5.5h3"/>
+  <path d="M11.5 18.5h1"/>
 </svg>

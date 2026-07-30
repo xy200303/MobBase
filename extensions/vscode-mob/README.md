@@ -6,6 +6,19 @@ The extension intentionally keeps SDK installation, Android Emulator, ADB, proje
 
 `Mob: Run Project` and `Mob: Follow Project Logs` use an integrated terminal so interactive output remains available. Build, test, release, and installation consume `--json=events` and write structured progress to the Mob Output channel. For native Android, `Mob: Start Debug Session` consumes `mob debug --json=events`, receives a loopback ADB JDWP endpoint, and by default asks VS Code's installed Java debugging extension to attach. The extension removes its own ADB forward when that debug session ends. Set `mob.autoAttachNativeDebug` to `false` to attach manually. Flutter debug continues to expose its Dart VM Service target to the installed Flutter tooling.
 
+## Toolchains view
+
+The Toolchains view is a compact summary of the environments Mob can use in the current workspace. The number beside each item is a count, not an error indicator:
+
+- **Diagnostics** shows the checks returned by `mob doctor`. Expand it to see which checks are ready, missing, or need attention.
+- **Android SDK** shows Android SDK installations discovered or registered by Mob.
+- **JDK** shows Java installations available to Android and Gradle builds.
+- **Flutter** shows discovered Flutter SDK installations. A value of `0` simply means no Flutter SDK has been found; it does not affect native Android projects.
+
+Use the view toolbar to install a toolchain component, create an Android project, build the open project, run it on a device, or refresh the information. The extension reads the status from the Mob CLI, so the displayed result is the same environment state used by command-line workflows.
+
+When creating an Android or Flutter project, the extension asks for its parent directory. It defaults to the current workspace and creates a new `<project-name>` folder there. After a successful creation, select **Open Project** in the confirmation message to open the new folder in VS Code.
+
 The extension also provides a `mob` task type for VS Code's Run Task command and `tasks.json`. It only accepts supported Mob workflows, so task definitions remain declarative rather than passing arbitrary shell text through the extension:
 
 ```json

@@ -3,6 +3,7 @@ import { ActiveMobProcess, MobClient, MobCommandError, MobEvent } from "./mobCli
 
 export interface WorkflowOptions {
   title: string;
+  cwd?: string;
   onCompleted?: () => Promise<void> | void;
 }
 
@@ -32,7 +33,7 @@ export function startWorkflow(client: MobClient, output: vscode.OutputChannel, a
       output.appendLine(`[completed] ${describeData(event.data)}`);
       vscode.window.showInformationMessage(`Mob: ${options.title} completed.`);
     }
-  });
+  }, options.cwd);
   void process.completed.then(async (code) => {
     if (process.protocolError) {
       showMobError(new Error(process.protocolError));

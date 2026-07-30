@@ -28,3 +28,16 @@ func TestAndroidCreateRejectsJavaCompose(t *testing.T) {
 		t.Fatal("expected Java Compose template to be rejected")
 	}
 }
+
+func TestGradleWrapperHelpers(t *testing.T) {
+	if checksum := parseSHA256("A67EC9A87755A07D5F3115C233A065FA5C54C48A1DCB61C151A1A2E5DAEA9C2C gradle.zip"); checksum != "a67ec9a87755a07d5f3115c233a065fa5c54c48a1dcb61c151a1a2e5daea9c2c" {
+		t.Fatalf("checksum = %q", checksum)
+	}
+	if parseSHA256("not-a-checksum") != "" {
+		t.Fatal("invalid checksum was accepted")
+	}
+	path := gradleExecutable(`C:\\mob\\gradle`)
+	if filepath.Base(path) != "gradle.bat" && filepath.Base(path) != "gradle" {
+		t.Fatalf("unexpected Gradle executable path: %s", path)
+	}
+}

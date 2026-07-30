@@ -117,7 +117,7 @@ mob run --accept-licenses
 
 创建命令生成标准 Gradle 项目，不创建 `mob.yaml`，也不向项目注入 Mob 私有配置。项目应保留自己的 Gradle Wrapper；Mob 始终调用项目官方构建入口。
 
-> 当前首次执行 `mob android create` 需要本机可用的 `gradle` 来生成标准 Gradle Wrapper；缺失时 Mob 会返回 `MOB_TOOLCHAIN_MISSING`。已有项目的 `mob build`、`mob run`、`mob test` 与 `mob release` 使用项目自带的 Wrapper，不依赖全局 Gradle。
+首次创建时，Mob 优先复用系统 Gradle；系统没有时会从 Gradle 官方下载站获取经 SHA-256 校验的 Gradle 发行版，安装到 `MOB_HOME/toolchains/gradle`，并注册到用户级命令路径，供其他项目和终端复用。Windows 会安全更新用户 PATH；重启 VS Code 或打开新终端后即可直接执行 `gradle`。项目本身仍生成并使用自己的 Gradle Wrapper，`mob build`、`mob run`、`mob test` 与 `mob release` 不依赖全局 Gradle。
 
 ### 管理 SDK、NDK 与多版本项目
 
