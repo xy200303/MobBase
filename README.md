@@ -83,32 +83,34 @@ Mob 不会永久修改系统 `PATH`、`JAVA_HOME`、`ANDROID_HOME` 或 `ANDROID_
 
 仓库提供跨平台安装脚本。它们默认从 `xy200303/MobBase` 的 GitHub Release 下载当前宿主系统的最终二进制产物与同名 `.sha256` 校验文件，校验通过后安装到 `MOB_INSTALL_DIR`、`MOB_HOME/bin` 或默认的 `~/.mob/bin`，并默认只更新当前用户的 `PATH`。安装器会将已校验的 Release 二进制缓存到 `~/.mob/cache/releases/<platform>/<version-hash>`（或 `MOB_HOME`）；再次安装同一版本时直接复用缓存，缓存校验失败才重新下载。安装器不会请求管理员权限，也不会修改 Android/JDK 环境变量。
 
+无需下载仓库，直接执行远程安装脚本：
+
 Windows PowerShell：
 
 ```powershell
-.\scripts\install.ps1
+irm https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.ps1 | iex
 ```
 
 macOS/Linux：
 
 ```bash
-chmod +x scripts/install.sh
-./scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.sh | bash
 ```
 
-默认安装不需要 Go。`--version <tag>` 选择特定 Release（默认 `latest`）；只有显式传入 `-SourcePath` / `--source` 进行本地源码开发构建时才需要 Go `1.26` 或更高版本。每个 Release 必须发布与产物同名的 `.sha256` 文件，例如 `mob-windows-amd64.exe.sha256`。常用参数：
+默认安装不需要 Go。`--version <tag>` 选择特定 Release（默认 `latest`）；每个 Release 必须发布与产物同名的 `.sha256` 文件，例如 `mob-windows-amd64.exe.sha256`。常用远程安装参数：
 
 ```powershell
-.\scripts\install.ps1 -InstallDir D:\tools\mob\bin -NoPath
-.\scripts\install.ps1 -Version v0.1.0
-.\scripts\install.ps1 -SourcePath .
+$installer = irm https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.ps1
+& ([scriptblock]::Create($installer)) -InstallDir D:\tools\mob\bin -NoPath
+& ([scriptblock]::Create($installer)) -Version v0.1.0
 ```
 
 ```bash
-./scripts/install.sh --install-dir "$HOME/.local/bin" --no-path
-./scripts/install.sh --version v0.1.0
-./scripts/install.sh --source .
+curl -fsSL https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.sh | bash -s -- --install-dir "$HOME/.local/bin" --no-path
+curl -fsSL https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.sh | bash -s -- --version v0.1.0
 ```
+
+仅在本地源码开发时，才需要下载仓库并使用 `-SourcePath .` / `--source .` 由本机 Go `1.26` 或更高版本构建。
 
 ### 发布
 
