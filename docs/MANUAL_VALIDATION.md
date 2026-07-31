@@ -44,7 +44,7 @@
 
 ## 2. 首次 SDK 下载与终端 UI
 
-- [ ] 安装 `platform-tools`；预期显示 `[mob]` 阶段、Command-line Tools 的真实字节进度条（空 SDK 时）和精简的官方安装进度；不应显示 Windows 批处理回显或完整许可证正文：
+- [ ] 安装 `platform-tools`；预期 Mob 阶段使用主色，Command-line Tools 下载显示真实字节进度条（空 SDK 时），Android SDK 官方输出以灰色三行视窗滚动刷新；不应刷屏，也不应显示 Windows 批处理回显或完整许可证正文：
 
   ```powershell
   & $mob android sdk install managed --package platform-tools --accept-licenses

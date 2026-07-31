@@ -1,16 +1,20 @@
-// Package ui is the single place where pterm is used. It renders human-mode
-// terminal output: download progress bars and phase lines on stderr, result
-// tables on stdout. JSON output never passes through this layer.
+// Package ui renders human-mode terminal output: Mob phases, download progress,
+// external-tool output and result tables. JSON output never passes through
+// this layer.
 package ui
 
 import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/pterm/pterm"
 )
+
+const externalViewportLines = 3
 
 // UI renders one command run. ProgressTTY / TableTTY decide between pterm
 // rendering and plain output; both are derived from char-device detection so
@@ -21,8 +25,9 @@ type UI struct {
 	progressTTY bool
 	tableTTY    bool
 
-	mu     sync.Mutex
-	active *download
+	mu             sync.Mutex
+	active         *download
+	activeExternal *ExternalOutput
 }
 
 func New(stdout, stderr io.Writer) *UI {
@@ -61,7 +66,133 @@ func (u *UI) Phase(command, label string) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	u.stopActive()
-	fmt.Fprintf(u.stderr, "[mob] %s: %s\n", command, label)
+	u.settleExternal()
+	line := fmt.Sprintf("[mob] %s: %s", command, label)
+	if u.progressTTY {
+		line = pterm.FgCyan.Sprint(line)
+	}
+	fmt.Fprintln(u.stderr, line)
+}
+
+// External creates a three-line viewport for one official tool. Interactive
+// terminals repaint only the latest three lines in gray; redirected output is
+// emitted line by line without ANSI control sequences.
+func (u *UI) External(label string) *ExternalOutput {
+	if u == nil || u.stderr == nil {
+		return nil
+	}
+	return &ExternalOutput{ui: u, label: strings.TrimSpace(label)}
+}
+
+// ExternalOutput accepts arbitrary stdout/stderr chunks from a child process.
+// Both carriage returns and newlines are treated as updates because tools such
+// as sdkmanager redraw their progress on one terminal line.
+type ExternalOutput struct {
+	ui      *UI
+	label   string
+	mu      sync.Mutex
+	pending string
+	closed  bool
+
+	lines    []string
+	rendered int
+}
+
+func (e *ExternalOutput) Write(data []byte) (int, error) {
+	if e == nil {
+		return len(data), nil
+	}
+	e.mu.Lock()
+	if e.closed {
+		e.mu.Unlock()
+		return len(data), nil
+	}
+	e.pending += strings.ReplaceAll(strings.ReplaceAll(string(data), "\r\n", "\n"), "\r", "\n")
+	lines := make([]string, 0, 2)
+	for {
+		line, rest, found := strings.Cut(e.pending, "\n")
+		if !found {
+			break
+		}
+		e.pending = rest
+		lines = append(lines, line)
+	}
+	e.mu.Unlock()
+	for _, line := range lines {
+		e.render(line)
+	}
+	return len(data), nil
+}
+
+// Flush renders a final unterminated line without closing the viewport.
+func (e *ExternalOutput) Flush() {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	line := e.pending
+	e.pending = ""
+	e.mu.Unlock()
+	if line != "" {
+		e.render(line)
+	}
+}
+
+// Close leaves the final three lines visible and releases the viewport so the
+// next Mob phase or external process starts below it.
+func (e *ExternalOutput) Close() error {
+	if e == nil {
+		return nil
+	}
+	e.Flush()
+	e.mu.Lock()
+	e.closed = true
+	e.mu.Unlock()
+	e.ui.mu.Lock()
+	if e.ui.activeExternal == e {
+		e.ui.settleExternal()
+	}
+	e.ui.mu.Unlock()
+	return nil
+}
+
+func (e *ExternalOutput) render(line string) {
+	line = strings.TrimSpace(pterm.RemoveColorFromString(line))
+	if line == "" {
+		return
+	}
+	e.ui.mu.Lock()
+	defer e.ui.mu.Unlock()
+	e.ui.stopActive()
+	if e.ui.activeExternal != nil && e.ui.activeExternal != e {
+		e.ui.settleExternal()
+	}
+	e.ui.activeExternal = e
+	if !e.ui.progressTTY {
+		fmt.Fprintf(e.ui.stderr, "[mob] %s: %s\n", e.label, line)
+		return
+	}
+	e.lines = append(e.lines, line)
+	if len(e.lines) > externalViewportLines {
+		e.lines = e.lines[len(e.lines)-externalViewportLines:]
+	}
+	e.repaint()
+}
+
+func (e *ExternalOutput) repaint() {
+	if e.rendered > 0 {
+		fmt.Fprintf(e.ui.stderr, "\x1b[%dA", e.rendered)
+	}
+	width := pterm.GetTerminalWidth()
+	for _, line := range e.lines {
+		text := fmt.Sprintf("  %s | %s", e.label, line)
+		if width > 4 {
+			text = runewidth.Truncate(text, width-1, "…")
+		}
+		fmt.Fprint(e.ui.stderr, "\r\x1b[2K")
+		fmt.Fprintln(e.ui.stderr, pterm.FgGray.Sprint(text))
+	}
+	e.rendered = len(e.lines)
 }
 
 // Download returns a nil-safe progress callback for one download. total may
@@ -187,6 +318,14 @@ func (u *UI) stopActive() {
 	}
 	u.active.done = true
 	u.active = nil
+}
+
+func (u *UI) settleExternal() {
+	if u.activeExternal == nil {
+		return
+	}
+	u.activeExternal.rendered = 0
+	u.activeExternal = nil
 }
 
 // Table renders headers and rows as a pterm table on stdout and returns true.

@@ -5,6 +5,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/xy200303/MobBase/internal/system"
 )
 
 type sdkManagerOutput struct {
@@ -37,6 +39,12 @@ func (w *sdkManagerOutput) Flush() {
 	}
 	w.writeLine(w.pending)
 	w.pending = ""
+	if flusher, ok := w.output.(interface{ Flush() }); ok {
+		flusher.Flush()
+	}
+	if closer, ok := w.output.(io.Closer); ok {
+		_ = closer.Close()
+	}
 }
 
 func (w *sdkManagerOutput) writeLine(line string) {
@@ -44,11 +52,10 @@ func (w *sdkManagerOutput) writeLine(line string) {
 	if line == "" || w.output == nil {
 		return
 	}
-	isProgress := strings.HasPrefix(line, "[")
-	isStatus := strings.Contains(line, "Preparing ") || strings.Contains(line, "Installing ") || strings.Contains(line, "Downloading ") || strings.Contains(line, "Unzipping ") || strings.HasPrefix(line, "Warning:")
-	if !isProgress && !isStatus {
+	if system.IsWindowsBatchEcho(line) {
 		return
 	}
+	isProgress := strings.HasPrefix(line, "[")
 	if isProgress {
 		if percent, found := sdkManagerProgressPercent(line); found {
 			if percent != 100 && w.lastProgress >= 0 && percent/5 == w.lastProgress/5 {
@@ -65,7 +72,7 @@ func (w *sdkManagerOutput) writeLine(line string) {
 		return
 	}
 	w.lastLine = line
-	fmt.Fprintf(w.output, "[mob] Android SDK: %s\n", line)
+	fmt.Fprintln(w.output, line)
 }
 
 func sdkManagerProgressPercent(line string) (int, bool) {

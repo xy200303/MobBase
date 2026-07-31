@@ -2,8 +2,11 @@ package ui
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/pterm/pterm"
 )
 
 func TestDownloadThrottlesRedirectedOutput(t *testing.T) {
@@ -65,6 +68,60 @@ func TestPhaseClosesActiveProgressBar(t *testing.T) {
 	text := output.String()
 	if !strings.Contains(text, "[mob] mob build: Building project") {
 		t.Fatalf("unexpected phase output: %q", text)
+	}
+}
+
+func TestExternalOutputFallsBackToPlainLines(t *testing.T) {
+	var output bytes.Buffer
+	external := New(nil, &output).External("Android SDK")
+	_, _ = external.Write([]byte("Loading local repository...\rFetch remote repository...\n"))
+	_ = external.Close()
+
+	text := output.String()
+	if !strings.Contains(text, "[mob] Android SDK: Loading local repository...") || !strings.Contains(text, "[mob] Android SDK: Fetch remote repository...") {
+		t.Fatalf("unexpected redirected external output: %q", text)
+	}
+	if strings.Contains(text, "\x1b[") {
+		t.Fatalf("redirected external output contains ANSI controls: %q", text)
+	}
+}
+
+func TestExternalOutputRepaintsLatestThreeLinesInGray(t *testing.T) {
+	pterm.EnableStyling()
+	defer pterm.DisableStyling()
+	var output bytes.Buffer
+	external := newForced(nil, &output, true, false).External("Gradle")
+	for _, line := range []string{"first", "second", "third", "fourth"} {
+		_, _ = fmt.Fprintln(external, line)
+	}
+	_ = external.Close()
+
+	text := output.String()
+	lastRefresh := strings.LastIndex(text, "\x1b[3A")
+	if lastRefresh < 0 {
+		t.Fatalf("external viewport did not repaint three lines: %q", text)
+	}
+	finalFrame := text[lastRefresh:]
+	if strings.Contains(finalFrame, "first") || !strings.Contains(finalFrame, "second") || !strings.Contains(finalFrame, "third") || !strings.Contains(finalFrame, "fourth") {
+		t.Fatalf("unexpected final external viewport: %q", finalFrame)
+	}
+	if !strings.Contains(finalFrame, "\x1b[90m") {
+		t.Fatalf("external viewport is not gray: %q", finalFrame)
+	}
+}
+
+func TestPhaseUsesPrimaryColorAndSettlesExternalViewport(t *testing.T) {
+	pterm.EnableStyling()
+	defer pterm.DisableStyling()
+	var output bytes.Buffer
+	terminal := newForced(nil, &output, true, false)
+	external := terminal.External("Gradle")
+	_, _ = fmt.Fprintln(external, "building")
+	terminal.Phase("mob build", "Building project")
+
+	text := output.String()
+	if !strings.Contains(text, "\x1b[36m[mob] mob build: Building project") {
+		t.Fatalf("Mob phase does not use the primary color: %q", text)
 	}
 }
 

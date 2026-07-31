@@ -194,7 +194,7 @@ mob release check [--platform <id>]     签名前和发布前检查
 
 所有查询和有限工作流命令支持 `--json`，提供一个终态的稳定结构化结果给 VS Code 插件、CI 和 AI 工具；需要持续输出的命令使用 `--json=events` 提供 JSON Lines 事件流。普通用户不需要使用或理解这些参数。
 
-普通终端模式下，Mob 将阶段提示、可确定总大小的下载进度条和筛选后的官方安装状态写入标准错误；标准输出保留给命令结果。交互式终端用单行更新进度，重定向输出时按阶段写入可读日志。Mob 不转发 Windows 批处理命令回显或完整许可证正文。`--json` 和 `--json=events` 禁用这些人类终端 UI，确保标准输出始终可直接由插件、CI 和 AI 解析。
+普通终端模式下，Mob 将阶段提示、可确定总大小的下载进度条和外部工具状态写入标准错误；标准输出保留给命令结果。Mob 自身阶段使用产品主色，`sdkmanager`、Gradle、Flutter、Xcode 等官方工具输出统一显示为灰色，并在交互式终端内使用固定三行视窗滚动刷新最近细节，避免长任务刷屏。重定向或 CI 环境自动降级为无颜色、无光标控制的逐行日志。Mob 不转发 Windows 批处理命令回显或完整许可证正文。`--json` 和 `--json=events` 禁用这些人类终端 UI，确保标准输出始终可直接由插件、CI 和 AI 解析。
 
 当前 CLI 的 `mob env show` 是只读诊断：返回 Mob 根目录、当前 Android SDK/JDK/Flutter、默认设备以及 `child-process-only` 范围。Mob 不持久化改写系统 PATH、`JAVA_HOME` 或 Android 环境变量，因此不提供会误导用户的 `env restore`；构建和运行只在被启动的官方子进程中注入所需变量。
 

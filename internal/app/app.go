@@ -2728,10 +2728,10 @@ func (r runtime) download(label string) func(downloaded, total int64) {
 }
 
 func (r runtime) sdkManagerOutput() io.Writer {
-	if r.json {
+	if r.json || r.terminal == nil {
 		return nil
 	}
-	return newSDKManagerOutput(r.err)
+	return newSDKManagerOutput(r.terminal.External("Android SDK"))
 }
 
 func takeJSON(args []string) ([]string, bool) {

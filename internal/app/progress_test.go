@@ -34,7 +34,7 @@ func TestTerminalProgressUsesReadablePhaseLabels(t *testing.T) {
 
 func TestSDKManagerOutputFiltersBatchScriptNoise(t *testing.T) {
 	var output bytes.Buffer
-	writer := newSDKManagerOutput(&output)
+	writer := newSDKManagerOutput(ui.New(nil, &output).External("Android SDK"))
 	if _, err := writer.Write([]byte("set APP_HOME=C:\\\\sdk\r\nPreparing \"Install Android SDK Platform 35\".\r\n[=====] 25% Downloading\r\n")); err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestSDKManagerOutputFiltersBatchScriptNoise(t *testing.T) {
 
 func TestSDKManagerOutputThrottlesRepeatedProgress(t *testing.T) {
 	var output bytes.Buffer
-	writer := newSDKManagerOutput(&output)
+	writer := newSDKManagerOutput(ui.New(nil, &output).External("Android SDK"))
 	_, _ = writer.Write([]byte("[==] 20% Downloading\r[===] 21% Downloading\r[====] 25% Downloading\r[====================] 100% Downloading\r"))
 	writer.Flush()
 	text := output.String()
