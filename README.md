@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="#快速开始">快速开始</a> ·
+  <a href="#设备预览">设备预览</a> ·
   <a href="#自动化接口">自动化接口</a> ·
   <a href="#vs-code-扩展">VS Code 扩展</a> ·
   <a href="docs/PRODUCT_PLAN.md">产品规范</a> ·
@@ -72,12 +73,12 @@ curl -fsSL https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/insta
 
 ```powershell
 irm https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.ps1 -OutFile install-mob.ps1
-.\install-mob.ps1 -Version v0.1.0 -InstallDir D:\tools\mob\bin
+.\install-mob.ps1 -Version v0.1.8 -InstallDir D:\tools\mob\bin
 ```
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.sh
-bash install.sh --version v0.1.0 --install-dir "$HOME/.local/bin"
+bash install.sh --version v0.1.8 --install-dir "$HOME/.local/bin"
 ```
 
 安装脚本会校验同名 `.sha256` 文件，并将已验证的 Release 缓存到 `~/.mob/cache/releases`。查看脚本：[PowerShell](scripts/install.ps1) · [Bash](scripts/install.sh)。
@@ -157,6 +158,19 @@ mob run --mirror
 
 Android Emulator 使用官方窗口提供实时预览。真机的 `--mirror` 首次使用时会准备 Mob 内部的预览运行时；也可以将完整的 Windows x64 官方 `scrcpy` 压缩包解压到 `MOB_HOME/runtime/scrcpy`，Mob 检测到 `scrcpy.exe` 和同包依赖后会直接复用。
 
+## 设备预览
+
+在 VS Code 的 Mob 设备视图中选择 **Open Device Preview**，即可在编辑器内查看并操作已就绪的 Android 真机或模拟器。它不是截图轮询：Mob 使用内置且版本匹配的 scrcpy 运行时从设备获取 H.264 视频流，通过临时 ADB reverse 通道转发给本机 Webview。
+预览支持点击、滑动、文本输入以及返回、主屏和最近任务按键。会话只监听 `127.0.0.1`，每次启动都使用临时随机 token，关闭预览面板后会回收流、转发规则和设备端辅助进程。
+
+对于 IDE、CI 或自动化客户端，可启动此本地会话：
+
+```powershell
+mob device preview serve android:emulator-5554 --json=events
+```
+
+它返回版本化的 `mob.device.session.v1` 握手信息，包含平台、设备 ID、视频编码、临时 endpoint、token 和可用控制能力。协议定义见 [设备会话协议](docs/MOB_DEVICE_SESSION_PROTOCOL.md)。当前只有 Android 实现完整适配器；iOS 和 HarmonyOS 后续使用各自的官方设备通道接入同一协议。
+
 ## 自动化接口
 
 Mob 的终端接口与机器接口使用同一份命令契约。脚本、CI 和编辑器扩展可先查询命令能力，再执行受控工作流：
@@ -209,6 +223,7 @@ mob run --device android:emulator-5554 -- .\gradlew.bat installDebug
 | 管理 NDK | `mob android ndk list --sdk managed` / `available` / `install` |
 | 管理模拟器 | `mob android emulator list` / `create` / `start` |
 | 选择或查看设备 | `mob device list` / `mob device use <platform:native-id>` |
+| 启动内嵌预览会话 | `mob device preview serve <platform:native-id> --json=events` |
 | UI 自动化验证 | `mob device screenshot` / `mob device ui-tree --json` / `mob device wait --idle` / `mob device input tap <x> <y>` |
 | 构建、运行、测试、调试 | `mob build` / `mob run` / `mob test` / `mob debug` |
 | 查看项目日志 | `mob logs --follow --json=events` |
@@ -218,7 +233,7 @@ mob run --device android:emulator-5554 -- .\gradlew.bat installDebug
 
 ## VS Code 扩展
 
-扩展源码位于 [`extensions/vscode-mob`](extensions/vscode-mob)。它在 Activity Bar 中提供工具链与设备视图，并通过 Mob CLI 执行项目创建、SDK 安装、构建、运行、测试、日志、调试、无线设备连接和 Emulator 管理。
+扩展源码位于 [`extensions/vscode-mob`](extensions/vscode-mob)。它在 Activity Bar 中提供工具链与设备视图，并通过 Mob CLI 执行项目创建、SDK 安装、构建、运行、测试、日志、调试、无线设备连接和 Emulator 管理。对已就绪的 Android 设备，**Open Device Preview** 在 VS Code 内部打开低延迟的实时画面和基本操作。
 
 扩展不自行扫描 SDK 目录，也不直接调用 ADB 或 Emulator。将 `mob.path` 设置为 `mob` 命令名或可执行文件路径即可；其余行为通过以下设置控制：
 
@@ -239,6 +254,7 @@ npm run compile
 - 不读取、解析或改写 Flutter `.fvmrc`。
 - SDK 许可必须通过 `--accept-licenses` 显式确认。
 - Mob 只删除其托管目录内的组件；外部 SDK/JDK/Flutter 始终只读。
+- 设备预览仅在本机 loopback 上创建短期已认证会话；不写入设置、工作区或日志。
 - `mob support bundle` 生成脱敏诊断包，不包含项目文件、凭据、代理设置、环境变量或原始主机路径。
 - Mob 默认根目录是 `~/.mob`。`MOB_HOME` 可临时覆盖；`mob home set <path>` 可迁移 Mob 自己拥有的目录。
 
@@ -258,8 +274,8 @@ npm run compile
 推送 `v*` Git tag 会触发 Release 工作流：测试、静态检查、Windows x64/macOS x64/macOS ARM64/Linux x64/Linux ARM64 交叉编译、SHA-256 生成和 GitHub Release 上传。
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.8
+git push origin v0.1.8
 ```
 
 ## 路线图
