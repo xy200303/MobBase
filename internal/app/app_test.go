@@ -180,6 +180,26 @@ func TestVersionHelpContract(t *testing.T) {
 	}
 }
 
+func TestEmptyCommandShowsHelp(t *testing.T) {
+	t.Setenv("MOB_HOME", t.TempDir())
+	var stdout, stderr bytes.Buffer
+	if exit := Run(context.Background(), nil, &stdout, &stderr); exit != 0 {
+		t.Fatalf("empty command exit = %d, stderr = %s", exit, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Usage:") {
+		t.Fatalf("empty command output should contain help: %s", stdout.String())
+	}
+
+	stdout.Reset()
+	if exit := Run(context.Background(), []string{"--json"}, &stdout, &stderr); exit != 0 {
+		t.Fatalf("empty JSON command exit = %d, stderr = %s", exit, stderr.String())
+	}
+	event := assertEvent(t, stdout.Bytes(), true, "mob help")
+	if event["data"] == nil {
+		t.Fatalf("empty JSON command should contain help data: %s", stdout.String())
+	}
+}
+
 func TestEnvShowJSONContract(t *testing.T) {
 	mobHome := t.TempDir()
 	t.Setenv("MOB_HOME", mobHome)

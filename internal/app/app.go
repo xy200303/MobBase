@@ -82,7 +82,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 func (r runtime) execute(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+	if len(args) == 0 {
+		return r.help(nil)
+	}
+	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		return r.help(args[1:])
 	}
 	if helpPath, requested := inlineHelpPath(args); requested {
