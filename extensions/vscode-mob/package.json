@@ -2,8 +2,8 @@
   "name": "mob-vscode",
   "displayName": "Mob Mobile Environment",
   "description": "Manage and use mobile development environments through the Mob CLI.",
-  "version": "0.1.8",
-  "publisher": "xy200303",
+  "version": "0.1.9",
+  "publisher": "xiaoyun",
   "repository": {
     "type": "git",
     "url": "https://github.com/xy200303/MobBase.git"
@@ -19,6 +19,7 @@
     "Other"
   ],
   "main": "./out/extension.js",
+  "icon": "resources/mob.png",
   "files": [
     "out",
     "resources",

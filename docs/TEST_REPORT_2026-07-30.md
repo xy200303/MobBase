@@ -4,9 +4,15 @@
 版本范围：`main`（基线提交 `b751444`，包含本次测试发现的 Android 目录与 JSON 输出修复）  
 宿主机：Windows 10 `10.0.26200`，Go `1.26.0 windows/amd64`，Docker `29.2.1`
 
+## 验证目标
+
+本报告记录 2026-07-30 的验证基线。它验证的是 Mob 最核心的产品路径：把 Android 工具链管理从 Android Studio 和人工环境配置中拆出，使 VS Code、终端与 AI/CI 可以通过同一个 CLI 准备环境并执行工作流。
+
+这是一份历史测试记录，不代表之后版本的全部能力，也不把未执行的真机、模拟器或真实项目周期测试写成已验证结论。
+
 ## 结论
 
-Mob 的 Android 环境管理主路径、帮助契约、查询类 JSON、事件流 JSON Lines、真实 Android SDK/ADB 安装以及跨平台构建均通过验证。CLI 的标准输出在 `--json` 和 `--json=events` 模式下可由 VS Code 插件、CI 和 AI 直接解析；普通终端模式保留面向人的文本输出和进度提示。
+Mob 的 Android 环境管理主路径、帮助契约、查询类 JSON、事件流 JSON Lines、真实 Android SDK/ADB 安装以及跨平台构建均通过验证。CLI 的标准输出在 `--json` 和 `--json=events` 模式下可由 VS Code 插件、CI 和 AI 直接解析；普通终端模式保留面向人的文本输出和进度提示。这些结果支持“统一入口管理环境”的方向，但不等于 Android 全生命周期已在所有真实设备上完成验证。
 
 本轮测试发现并修复两项会影响 AI/插件使用的实现问题：Android 系统镜像目录未加载，以及 Windows `sdkmanager.bat` 的批处理回显进入成功 JSON 结果。当前仍未在本机完成真机授权、模拟器启动和真实 Android 项目构建/运行/调试/发布，这些项目明确列为环境限制，不能视为已验证。
 

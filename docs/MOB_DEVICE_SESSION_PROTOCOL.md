@@ -2,7 +2,9 @@
 
 ## Status
 
-`mob.device.session.v1` is Mob's local, versioned device display and control contract. It is designed for local IDE clients such as the VS Code extension. It does not replace Android ADB, Apple device services, Xcode, HDC, or DevEco; each platform adapter remains responsible for obtaining a display stream and applying an input event through its supported official channel.
+`mob.device.session.v1` is Mob's local, versioned device display and control contract. It lets a VS Code client display and operate a ready device without making the editor manage ADB, simulator processes, preview runtimes, ports, or device-specific credentials itself. It is one part of Mob's broader goal to make Android development practical in VS Code without a manual IDE environment setup.
+
+The protocol also gives an AI-capable IDE a stable way to start and close a local device session, while keeping device control in the CLI. It does not replace Android ADB, Apple device services, Xcode, HDC, or DevEco; each platform adapter remains responsible for obtaining a display stream and applying an input event through its supported official channel.
 
 Android is the first complete adapter. It uses Mob's matched scrcpy runtime to provide H.264 video, an ADB reverse tunnel, and ADB-backed input. iOS and HarmonyOS may expose the same session contract only after their official tools provide the required display and control capability.
 

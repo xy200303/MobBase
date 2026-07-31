@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/assets/logo.svg" width="148" alt="Mob logo: a mobile device with a command prompt" />
+  <img src="docs/assets/logo.svg" width="148" alt="Mob logo" />
 </p>
 
 <h1 align="center">Mob</h1>
 
 <p align="center">
-  <strong>管理 Android 开发所需的本机工具链。</strong><br />
-  为终端、VS Code 和持续集成提供一致的环境准备与运行入口。
+  <strong>在 VS Code 中完成 Android 开发，不必安装完整 Android Studio，也不必手工配置环境。</strong><br />
+  Mob 按项目准备 Android 工具链，并提供适合终端、VS Code、CI 与 AI 工具调用的统一入口。
 </p>
 
 <p align="center">
@@ -14,48 +14,55 @@
   <a href="https://github.com/xy200303/MobBase/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/xy200303/MobBase/release.yml?style=flat-square&label=release%20pipeline" alt="Release pipeline" /></a>
   <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/xy200303/MobBase?style=flat-square&label=go" alt="Go version" /></a>
   <img src="https://img.shields.io/badge/current%20platform-Android-24C6B5?style=flat-square" alt="Current platform Android" />
-  <img src="https://img.shields.io/badge/protocol-text%20%7C%20JSON%20%7C%20JSONL-FFB547?style=flat-square" alt="Text JSON and JSON Lines protocol" />
-  <img src="https://img.shields.io/badge/hosts-Windows%20%7C%20macOS%20%7C%20Linux-536DFE?style=flat-square" alt="Windows macOS and Linux hosts" />
+  <img src="https://img.shields.io/badge/interface-text%20%7C%20JSON%20%7C%20JSONL-FFB547?style=flat-square" alt="Text JSON and JSON Lines interface" />
 </p>
 
 <p align="center">
   <a href="#快速开始">快速开始</a> ·
-  <a href="#设备预览">设备预览</a> ·
-  <a href="#自动化接口">自动化接口</a> ·
+  <a href="#为什么需要-mob">为什么需要 Mob</a> ·
+  <a href="#ai-与自动化接口">AI 与自动化接口</a> ·
   <a href="#vs-code-扩展">VS Code 扩展</a> ·
   <a href="docs/PRODUCT_PLAN.md">产品规范</a> ·
-  <a href="docs/TEST_REPORT_2026-07-30.md">测试报告</a>
+  <a href="docs/MANUAL_VALIDATION.md">手动验证</a>
 </p>
 
 ---
 
-Mob 是移动开发工具链管理 CLI。当前版本完整支持 Android：发现或安装 SDK、NDK、JDK、ADB、Emulator 和 Flutter/FVM，并在构建、运行和调试时只向当前子进程注入所需环境。
+## 目标
 
-Mob 不替代 Gradle、Android Studio、Flutter、FVM、Xcode 或 DevEco。项目仍使用自己的 Gradle Wrapper、Flutter 配置和官方构建入口；Mob 负责本机工具链的发现、选择、安装与环境注入。
+Android 开发的难点经常不在代码，而在开发机：Android SDK、Build Tools、NDK、JDK、ADB、Emulator、系统镜像、Gradle 和环境变量相互影响。Android Studio 能集中处理其中一部分，但对习惯使用 VS Code 的开发者来说，安装完整 IDE 和反复配置本机环境成本很高。
 
-## 为什么是 Mob
+Mob 的目标很明确：**让 VS Code 成为 Android 日常开发入口，让环境准备变成一个命令或一次插件操作。**
+
+Mob 使用 Android 官方 command-line tools、Gradle Wrapper、ADB 与 Emulator。它不伪造或替代这些工具，而是负责发现、下载、版本选择、设备选择与本次进程的环境注入。项目仍是标准 Android、Flutter 或 Kotlin Multiplatform 项目，可以随时使用 Gradle、Flutter 或 Android Studio 打开。
+
+Android Studio 仍适合布局可视化编辑、Profiler 和少数专项诊断；它不再是构建、运行、调试 Android 项目的必要前提。
+
+## 为什么需要 Mob
 
 | 常见问题 | Mob 的处理方式 |
 | --- | --- |
-| 不同项目需要 API 27、34、35 或不同 NDK/JDK | 按项目读取 Gradle 需求，选择并临时注入相应工具链。 |
-| 新机器没有 SDK、ADB、Emulator 或系统镜像 | 查询官方可安装目录；工作流可在许可证确认后自动补齐缺失组件。 |
-| 系统已有 Android Studio 或外部 SDK | 自动发现；导入仅注册引用，绝不复制、覆盖或删除外部目录。 |
-| VS Code、CI 或脚本需要稳定接口 | 终端输出保持可读；`--json` 和 `--json=events` 提供结构化结果。 |
-| 不想污染全局环境变量 | 不持久化改写 `PATH`、`JAVA_HOME`、`ANDROID_HOME` 或 `ANDROID_SDK_ROOT`。 |
+| 新电脑上没有 SDK、ADB、JDK 或模拟器 | 从官方目录按需准备缺失组件，并在许可确认后继续工作流。 |
+| VS Code 需要手动设置 SDK 路径、PATH 与环境变量 | CLI 与扩展共用 Mob 管理的工具链；构建时只向子进程注入环境。 |
+| 一个项目用 API 27，另一个项目用 API 35 或不同 NDK/JDK | 从当前项目的 Gradle 配置推导需求，按项目选择工具链。 |
+| 真机、模拟器与无线调试入口分散 | 使用统一设备模型列出、选择、连接和启动设备。 |
+| AI 编程工具只能猜测本机环境和命令结果 | 使用稳定的 `--json`、`--json=events`、错误码和 UI 自动化命令。 |
 
-## 当前交付范围
+Mob 不会创建 `mob.yaml`，不会改写 `build.gradle`、Flutter 配置或 `.fvmrc`，也不会永久设置 `JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT`。它管理自己的目录，默认位于 `~/.mob`。
 
-| 平台 | 状态 | 当前范围 |
+## 当前范围
+
+| 平台 | 状态 | 当前能力 |
 | --- | --- | --- |
-| Android | 当前交付 | SDK/NDK/JDK、Flutter/FVM、ADB、模拟器、真机、构建、运行、调试、测试、日志与发布构建。 |
-| iOS | 规划中 | 保留命令命名空间；Xcode、Simulator、真机、签名和发布将在 macOS 上逐项接入。 |
-| HarmonyOS | 规划中 | 保留命令命名空间；DevEco SDK、设备和发布工作流将在后续版本接入。 |
+| Android | 已交付 | SDK、NDK、JDK、ADB、Emulator、真机、Flutter/FVM、构建、运行、调试、测试、日志、发布构建与 VS Code 设备预览。 |
+| iOS | 规划中 | 保留平台边界；Xcode、Simulator、真机、签名和发布尚未作为完整工作流交付。 |
+| HarmonyOS | 规划中 | 保留平台边界；DevEco SDK、设备和构建工作流尚未交付。 |
 
-Android 是当前唯一的完整实现目标。iOS 与 HarmonyOS 的命令边界已经稳定，但不表示跨平台工作流已可交付。
+本仓库当前只承诺完整的 Android 开发体验。
 
 ## 安装
 
-安装脚本下载与校验 GitHub Release 中对应当前宿主机的最终二进制，不需要 Go。默认安装位置为 `~/.mob/bin`，仅将该目录加入当前用户的 `PATH`。
+安装脚本下载并校验对应宿主机的 Release 二进制，不要求先安装 Go。默认安装到 `~/.mob/bin`，并将该目录加入当前用户的 `PATH`。
 
 ### Windows PowerShell
 
@@ -69,44 +76,39 @@ irm https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.ps1 
 curl -fsSL https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.sh | bash
 ```
 
-安装特定版本或使用自定义目录时，先下载脚本再传参：
+确认安装：
+
+```powershell
+mob --version
+mob help
+```
+
+安装特定 Release 或自定义目录时，先下载脚本再传参：
 
 ```powershell
 irm https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.ps1 -OutFile install-mob.ps1
-.\install-mob.ps1 -Version v0.1.8 -InstallDir D:\tools\mob\bin
+.\install-mob.ps1 -Version latest -InstallDir D:\tools\mob\bin
 ```
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/xy200303/MobBase/main/scripts/install.sh
-bash install.sh --version v0.1.8 --install-dir "$HOME/.local/bin"
+bash install.sh --version latest --install-dir "$HOME/.local/bin"
 ```
 
-安装脚本会校验同名 `.sha256` 文件，并将已验证的 Release 缓存到 `~/.mob/cache/releases`。查看脚本：[PowerShell](scripts/install.ps1) · [Bash](scripts/install.sh)。
-
-从源码构建仅用于开发：
-
-```powershell
-go build -o mob.exe ./cmd/mob
-.\mob.exe help
-```
-
-```bash
-go build -o mob ./cmd/mob
-./mob help
-```
+已验证的下载会缓存到 `~/.mob/cache/releases`。安装脚本见 [PowerShell](scripts/install.ps1) 与 [Bash](scripts/install.sh)。
 
 ## 快速开始
 
-### 运行已有 Android 项目
+### 在 VS Code 打开已有 Android 项目
+
+安装 Mob 后，在 VS Code 打开项目目录。可以使用 Mob 扩展的工具链与设备视图，也可以直接在集成终端运行：
 
 ```powershell
-cd C:\work\notes
 mob doctor
-mob device list
 mob run --accept-licenses
 ```
 
-`mob run` 识别当前 Gradle 项目的 SDK、Build Tools、NDK 和 JDK 需求。若没有可用设备，在已确认许可证且未传入 `--no-device-create` 时，它会准备缺失组件、创建匹配项目 API 的默认 AVD，并继续运行项目。
+`mob run` 会识别当前项目。对于原生 Android 与 Kotlin Multiplatform Android 目标，它调用项目 Gradle Wrapper；对于 Flutter Android 目标，它调用项目的 Flutter 或 FVM 工作流。缺少 SDK Platform、Build Tools、NDK、JDK、ADB 或 Emulator 时，Mob 会在许可确认后准备可自动安装的组件。没有可用设备时，默认可创建与项目 API 匹配的 Mob 托管 AVD。
 
 ### 创建并运行原生 Android 项目
 
@@ -116,18 +118,9 @@ cd notes
 mob run --accept-licenses
 ```
 
-创建命令生成标准 Gradle 项目，不创建 `mob.yaml`，也不向项目注入 Mob 私有配置。项目应保留自己的 Gradle Wrapper；Mob 始终调用项目官方构建入口。
+生成的是标准 Gradle 工程。Mob 创建项目时会优先复用系统 Gradle；没有时会下载经过校验的 Gradle 发行版以生成 Wrapper。之后 `mob build`、`mob run`、`mob test` 与 `mob release` 使用项目自己的 Gradle Wrapper。
 
-首次创建时，Mob 优先复用系统 Gradle；系统没有时会从 Gradle 官方下载站获取经 SHA-256 校验的 Gradle 发行版，安装到 `MOB_HOME/toolchains/gradle`，并注册到用户级命令路径，供其他项目和终端复用。Windows 会安全更新用户 PATH；重启 VS Code 或打开新终端后即可直接执行 `gradle`。项目本身仍生成并使用自己的 Gradle Wrapper，`mob build`、`mob run`、`mob test` 与 `mob release` 不依赖全局 Gradle。
-
-### 管理 SDK、NDK 与多版本项目
-
-```powershell
-mob catalog --platform android
-mob android sdk install managed --api 35 --accept-licenses
-mob android ndk available
-mob android sdk inspect managed
-```
+### 多版本项目并存
 
 ```powershell
 cd C:\work\legacy-api-27
@@ -137,9 +130,9 @@ cd C:\work\modern-api-35
 mob debug --accept-licenses
 ```
 
-Mob 按每个项目的 Gradle 配置选择工具链；一个项目使用的 SDK/JDK/NDK 不会永久写入另一个项目或系统环境。
+Mob 按当前项目选择 SDK、Build Tools、NDK 和 JDK，仅对本次子进程注入环境。运行旧项目不会破坏新项目的环境，反之亦然。
 
-### 连接真机或模拟器
+### 连接真机与模拟器
 
 ```powershell
 mob device list
@@ -147,7 +140,7 @@ mob device use android:emulator-5554
 mob run
 ```
 
-无线调试：
+无线 Android 设备：
 
 ```powershell
 mob android device pair 192.168.1.20:37123 --code 123456
@@ -156,24 +149,25 @@ mob device use android:192.168.1.20:5555
 mob run --mirror
 ```
 
-Android Emulator 使用官方窗口提供实时预览。真机的 `--mirror` 首次使用时会准备 Mob 内部的预览运行时；也可以将完整的 Windows x64 官方 `scrcpy` 压缩包解压到 `MOB_HOME/runtime/scrcpy`，Mob 检测到 `scrcpy.exe` 和同包依赖后会直接复用。
+## VS Code 扩展
 
-## 设备预览
+[Mob for VS Code](https://marketplace.visualstudio.com/items?itemName=xiaoyun.mob-vscode) 是 CLI 的可视化入口。扩展不会自行扫描 SDK 或直接调用 ADB、Emulator；所有环境、设备和工作流仍由同一个 `mob` CLI 处理。
 
-在 VS Code 的 Mob 设备视图中选择 **Open Device Preview**，即可在编辑器内查看并操作已就绪的 Android 真机或模拟器。它不是截图轮询：Mob 使用内置且版本匹配的 scrcpy 运行时从设备获取 H.264 视频流，通过临时 ADB reverse 通道转发给本机 Webview。
-预览支持点击、滑动、文本输入以及返回、主屏和最近任务按键。会话只监听 `127.0.0.1`，每次启动都使用临时随机 token，关闭预览面板后会回收流、转发规则和设备端辅助进程。
+在 Activity Bar 的 Mob 视图中可以：
 
-对于 IDE、CI 或自动化客户端，可启动此本地会话：
+- 查看 Android SDK、JDK、Flutter 与设备诊断结果。
+- 创建标准 Android 或 Flutter 项目。
+- 安装 SDK/NDK/系统镜像，创建、启动与停止 Android 模拟器。
+- 运行、构建、测试、调试、查看日志与创建发布产物。
+- 配对无线真机，选择默认设备，并在编辑器中打开设备预览。
 
-```powershell
-mob device preview serve android:emulator-5554 --json=events
-```
+设备预览是 H.264 实时视频流，不是截图轮询。Android 真机与模拟器都可以在 VS Code 中显示，并支持点击、滑动、文本输入、返回、主页和最近任务。会话只监听 `127.0.0.1`，使用短期 token；关闭面板会回收临时 ADB 转发和辅助进程。
 
-它返回版本化的 `mob.device.session.v1` 握手信息，包含平台、设备 ID、视频编码、临时 endpoint、token 和可用控制能力。协议定义见 [设备会话协议](docs/MOB_DEVICE_SESSION_PROTOCOL.md)。当前只有 Android 实现完整适配器；iOS 和 HarmonyOS 后续使用各自的官方设备通道接入同一协议。
+扩展安装后未找到 CLI 时，设置 `mob.path` 为 `mob` 命令或可执行文件的绝对路径。详细行为见 [插件文档](extensions/vscode-mob/README.md)。
 
-## 自动化接口
+## AI 与自动化接口
 
-Mob 的终端接口与机器接口使用同一份命令契约。脚本、CI 和编辑器扩展可先查询命令能力，再执行受控工作流：
+Mob 面向人提供可读的终端输出，也面向 AI、编辑器扩展和 CI 提供机器接口。工具无需解析一段不稳定的报错文字，即可判断当前环境、进度与下一步动作：
 
 ```powershell
 mob help run --format json
@@ -182,85 +176,53 @@ mob catalog --platform android --json
 mob run --accept-licenses --json=events
 ```
 
-| 模式 | 适用对象 | stdout 契约 |
+| 模式 | 用途 | stdout 契约 |
 | --- | --- | --- |
-| 默认文本 | 开发者终端 | 命令结果；进度和阶段信息写入 stderr。 |
-| `--json` | VS Code、CI 与脚本的查询和有限工作流 | 一个终态 JSON 对象，包含 `schemaVersion`、`event`、`ok` 和 `data` 或 `error`。 |
-| `--json=events` | build/run/debug/logs 等长任务 | JSON Lines 事件流，stdout 不混入进度条或 SDK 工具原始文本。 |
+| 默认文本 | 人在终端中执行 | 人类可读结果；阶段与进度输出到 stderr。 |
+| `--json` | 查询或有限工作流 | 一个终态 JSON 对象，含 `schemaVersion`、`event`、`ok` 与 `data` 或 `error`。 |
+| `--json=events` | build、run、debug、logs 等长任务 | JSON Lines 事件流；不混入进度条与外部工具原始输出。 |
 
-机器调用可根据稳定错误码决定下一步，而不是解析面向人的字符串，例如：
+AI 开发 Android 项目时，可以先读取帮助契约和当前状态，再准备环境、构建、运行、调试与检查设备 UI：
 
-```json
-{
-  "schemaVersion": "1.0",
-  "event": "error",
-  "ok": false,
-  "error": {
-    "code": "MOB_LICENSE_REQUIRED",
-    "remediation": "Review the Android SDK license, then repeat with --accept-licenses."
-  }
-}
+```powershell
+mob doctor --fix --accept-licenses --json=events
+mob run --accept-licenses --json=events
+mob device screenshot android:emulator-5554
+mob device ui-tree android:emulator-5554 --json
 ```
 
-自定义官方命令可通过 `--` 转发，Mob 仍负责平台校验、设备选择和本次环境注入：
+错误对象包含稳定错误码和修复建议。例如 `MOB_LICENSE_REQUIRED` 表示需要开发者显式同意 Android SDK 许可，AI 或插件可以据此请求确认，而不是擅自接受许可证。
+
+如需调用项目的特殊官方命令，可用 `--` 转发。Mob 仍负责平台检查、设备选择和本次环境注入：
 
 ```powershell
 mob run --device android:emulator-5554 -- .\gradlew.bat installDebug
 ```
 
-需要在自定义命令中引用目标设备时，使用完整参数占位符 `{{mob.device.nativeId}}`、`{{mob.device.id}}` 或 `{{mob.platform}}`；Mob 同时注入 `MOB_DEVICE_ID` 与 `MOB_DEVICE_NATIVE_ID`。
+完整的事件与错误码契约见 [产品规范](docs/PRODUCT_PLAN.md)。设备预览协议见 [设备会话协议](docs/MOB_DEVICE_SESSION_PROTOCOL.md)。
 
 ## 常用命令
 
 | 目标 | 命令 |
 | --- | --- |
-| 查看当前 Mob 版本 | `mob --version` 或 `mob version` |
-| 查看本机总览 | `mob status` |
-| 诊断 Android 环境 | `mob doctor` 或 `mob android doctor` |
-| 诊断并补齐当前项目环境 | `mob doctor --fix --accept-licenses` |
-| 查看官方可安装目录 | `mob catalog --platform android` |
-| 管理 SDK 组件 | `mob android sdk list` / `available` / `install` / `inspect` |
-| 管理 NDK | `mob android ndk list --sdk managed` / `available` / `install` |
-| 管理模拟器 | `mob android emulator list` / `create` / `start` |
-| 选择或查看设备 | `mob device list` / `mob device use <platform:native-id>` |
-| 启动内嵌预览会话 | `mob device preview serve <platform:native-id> --json=events` |
-| UI 自动化验证 | `mob device screenshot` / `mob device ui-tree --json` / `mob device wait --idle` / `mob device input tap <x> <y>` |
-| 构建、运行、测试、调试 | `mob build` / `mob run` / `mob test` / `mob debug` |
-| 查看项目日志 | `mob logs --follow --json=events` |
-| 按包名查看日志 | `mob logs --app <package>` |
-| 生成发布产物 | `mob release --platform android --artifact aab` |
-| 获取完整命令契约 | `mob help --format markdown` |
+| 查看版本和帮助 | `mob --version`、`mob help`、`mob help <command> --format json` |
+| 查看状态与诊断 | `mob status`、`mob doctor`、`mob doctor --fix --accept-licenses` |
+| 查看可安装组件 | `mob catalog --platform android`、`mob android sdk available`、`mob android ndk available` |
+| 管理 Android SDK | `mob android sdk list`、`mob android sdk install managed --api 35 --accept-licenses` |
+| 管理模拟器 | `mob android emulator image available`、`mob android emulator create`、`mob android emulator start` |
+| 管理设备 | `mob device list`、`mob device use <platform:native-id>` |
+| 日常项目工作流 | `mob build`、`mob run`、`mob debug`、`mob test`、`mob logs --follow` |
+| 发布 Android 产物 | `mob release --platform android --artifact aab` |
+| 设备检查与自动化 | `mob device screenshot`、`mob device ui-tree --json`、`mob device wait --idle` |
 
-## VS Code 扩展
+## 安全与边界
 
-扩展源码位于 [`extensions/vscode-mob`](extensions/vscode-mob)。它在 Activity Bar 中提供工具链与设备视图，并通过 Mob CLI 执行项目创建、SDK 安装、构建、运行、测试、日志、调试、无线设备连接和 Emulator 管理。对已就绪的 Android 设备，**Open Device Preview** 在 VS Code 内部打开低延迟的实时画面和基本操作。
+- Android SDK 许可证必须通过 `--accept-licenses` 显式确认。
+- Mob 只删除 `MOB_HOME` 内由自己托管的组件；发现或导入的外部工具链始终只读。
+- `mob support bundle` 只生成脱敏的 Mob 诊断信息，不包含项目文件、密钥、环境变量、代理设置或原始主机路径。
+- iOS 与 HarmonyOS 不是当前完整交付能力，Mob 不会伪造跨平台构建、签名、设备控制或发布结果。
 
-扩展不自行扫描 SDK 目录，也不直接调用 ADB 或 Emulator。将 `mob.path` 设置为 `mob` 命令名或可执行文件路径即可；其余行为通过以下设置控制：
-
-- `mob.autoRefresh`：工作区变更时刷新 Mob 状态。
-- `mob.autoAttachNativeDebug`：Mob 返回 Android JDWP 目标后，请求已安装的 Java/Kotlin 调试扩展附加。
-
-构建扩展：
-
-```powershell
-cd extensions/vscode-mob
-npm ci
-npm run compile
-```
-
-## 边界与安全
-
-- 不创建 `mob.yaml`，不修改 Gradle、Flutter、FVM 或其他项目配置。
-- 不读取、解析或改写 Flutter `.fvmrc`。
-- SDK 许可必须通过 `--accept-licenses` 显式确认。
-- Mob 只删除其托管目录内的组件；外部 SDK/JDK/Flutter 始终只读。
-- 设备预览仅在本机 loopback 上创建短期已认证会话；不写入设置、工作区或日志。
-- `mob support bundle` 生成脱敏诊断包，不包含项目文件、凭据、代理设置、环境变量或原始主机路径。
-- Mob 默认根目录是 `~/.mob`。`MOB_HOME` 可临时覆盖；`mob home set <path>` 可迁移 Mob 自己拥有的目录。
-
-详细平台边界、命令语义、设备策略和发布行为见 [产品规范](docs/PRODUCT_PLAN.md)。
-
-## 开发与发布
+## 开发与验证
 
 ```powershell
 go test ./... -count=1 -timeout 60s
@@ -268,19 +230,15 @@ go test -race ./... -count=1 -timeout 120s
 go vet ./...
 
 cd extensions/vscode-mob
+npm ci
 npm run compile
 ```
 
-推送 `v*` Git tag 会触发 Release 工作流：测试、静态检查、Windows x64/macOS x64/macOS ARM64/Linux x64/Linux ARM64 交叉编译、SHA-256 生成和 GitHub Release 上传。
-
-```bash
-git tag v0.1.8
-git push origin v0.1.8
-```
+真实 Android 环境的验证步骤见 [手动验证清单](docs/MANUAL_VALIDATION.md)，已执行的验证和未覆盖风险见 [测试报告](docs/TEST_REPORT_2026-07-30.md)。
 
 ## 路线图
 
-1. 完成 Android 真机、模拟器、企业网络和发布签名的真实环境验证。
-2. 扩展缓存恢复与更多 Android 项目类型的兼容性测试。
-3. 在 macOS 上接入 iOS 的 Xcode、Simulator、真机、签名、调试和 IPA 发布流程。
-4. 基于 DevEco 与公开官方 SDK 接入 HarmonyOS 工具链、设备、构建、调试和发布能力。
+1. 扩充真实 Android 项目、模拟器、真机、企业网络与签名发布验证。
+2. 持续完善 Android 项目类型的识别与工具链兼容性。
+3. 在 macOS 上基于 Xcode 接入 iOS 工具链和设备工作流。
+4. 基于 DevEco 和公开官方 SDK 接入 HarmonyOS 工具链和设备工作流。

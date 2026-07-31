@@ -1,26 +1,32 @@
 # Mob 产品规范
 
-## 0. 当前交付范围
+## 0. 产品目标与交付范围
 
-当前版本以 Android 为唯一交付重点：Android SDK/NDK/JDK、Flutter Android、ADB、模拟器、真机、构建、运行、调试、测试、日志、发布构建和 VS Code 入口均属于本阶段范围。
+Mob 的产品目标是让开发者使用 VS Code 完成 Android 日常开发，而不必为了安装 SDK、配置 ADB/JDK/Emulator 和处理多版本环境去安装完整 Android Studio。Android SDK、Build Tools、NDK、JDK、ADB 与 Emulator 仍然是官方必需工具；Mob 的职责是把它们按项目发现、安装、选择并交给正确的官方构建器。
 
-iOS 与 HarmonyOS 保留稳定的平台命名空间和产品设计边界，但它们不是当前跨平台交付承诺。后续版本将分别基于 Xcode 与 DevEco 的官方能力接入，不复用 Android SDK/NDK 或绕过平台许可证、账号、证书和宿主机限制。
+同一个能力必须同时服务三类调用方：人在终端中的命令、VS Code 插件的可视化操作，以及 AI/CI 的机器调用。三者不得各自维护 SDK 路径、设备状态或环境变量，也不得依赖解析不稳定的人类输出。
+
+当前版本以 Android 为唯一完整交付重点：Android SDK/NDK/JDK、Flutter Android、ADB、模拟器、真机、构建、运行、调试、测试、日志、发布构建和 VS Code 入口均属于本阶段范围。
+
+iOS 与 HarmonyOS 仅保留稳定的平台命名空间和设计边界，不是当前跨平台交付承诺。后续版本分别基于 Xcode 与 DevEco 的官方能力接入，不复用 Android SDK/NDK，不绕过平台许可证、账号、证书或宿主机限制。
 
 ## 1. 产品定位
 
-Mob 是移动开发环境管理 CLI，定位类似 `nvm`：发现已有工具链、安装缺失组件、管理多个版本，并把正确的环境交给当前项目的官方构建工具。
+Mob 是移动开发环境管理 CLI，定位类似 `nvm`：发现已有工具链、安装缺失组件、管理多个版本，并把正确环境交给当前项目的官方构建工具。它不是新的 IDE，也不是新的构建系统。
 
-Mob 不替代 Android Studio、Xcode、DevEco、Gradle、FVM、React Native 或语言调试器。它解决这些工具在同一台机器上共存、配置、选择设备和被 VS Code 调用的问题，并可管理用于执行项目的 Flutter SDK。
+Mob 不替代 Gradle、Flutter、FVM、Xcode、DevEco 或语言调试器，也不要求卸载 Android Studio。项目仍由自身的 Gradle Wrapper、Flutter/FVM 配置和官方构建入口维护。Android Studio 仍适合布局可视化编辑、Profiler 与专项诊断，但不应成为日常 build/run/debug 的前置条件。
 
 ```text
-Mob 管理：SDK、NDK、JDK、Flutter SDK、ADB、模拟器、设备、环境变量
-项目工具管理：Gradle、FVM 项目版本、React Native、CocoaPods、DevEco 项目配置
-VS Code 插件：环境与设备可视化、调用 Mob、接入现有调试扩展
+Mob：SDK、NDK、JDK、Flutter SDK、ADB、模拟器、设备、版本选择、按次环境注入、JSON 契约
+项目：Gradle Wrapper、Flutter/FVM 项目版本、React Native、CocoaPods、DevEco 项目配置
+VS Code：编辑、可视化操作、终端、任务与现有调试扩展接入
+AI / CI：读取命令契约与结构化状态，执行受控工作流，不猜测环境或文本报错
 ```
 
 ## 2. 核心原则
 
 - 零项目配置：Mob 不创建 `mob.yaml`，不向项目写入配置文件。
+- VS Code 优先：Android 的日常开发路径必须可由 VS Code 集成终端或 Mob 扩展完成，不以 Android Studio 为前置依赖。
 - 项目优先：每次执行都从 Gradle、`pubspec.yaml`、`package.json`、Xcode、DevEco 等现有文件识别需求。
 - 平台隔离：Android、iOS、HarmonyOS 的路径、缓存、工具和子进程环境彼此隔离。
 - 按次注入：日常 `build`、`run`、`debug` 只给本次子进程注入工具链，不修改用户全局环境变量。
@@ -28,6 +34,7 @@ VS Code 插件：环境与设备可视化、调用 Mob、接入现有调试扩�
 - 显式切换：`mob <platform> ... use` 只更新 Mob 自己的默认选择；`build`、`run`、`debug` 再把它按次注入子进程，不改写用户级环境变量。
 - 已有环境优先：自动发现已有工具链；仅非标准路径可通过 `mob <platform> ... import`（例如 `mob android sdk import`）手动导入，且不复制、覆盖或删除它们。
 - 复用官方能力：编译、模拟器、签名、调试和设备桥接均调用平台官方工具。
+- 机器可调用：每个公开工作流必须有可查询帮助、稳定错误码，以及不混入终端装饰内容的 `--json` 或 `--json=events` 契约。
 
 ## 3. 根目录与本机状态
 
