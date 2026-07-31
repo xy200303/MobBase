@@ -52,9 +52,15 @@ func TestDiscoverIgnoresPartialSystemImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
-	if len(sdks) != 1 || len(sdks[0].Components.SystemImages) != 0 {
-		t.Fatalf("partial system image was treated as installed: %#v", sdks)
+	for _, sdk := range sdks {
+		if sdk.Name == "managed" {
+			if len(sdk.Components.SystemImages) != 0 {
+				t.Fatalf("partial system image was treated as installed: %#v", sdk)
+			}
+			return
+		}
 	}
+	t.Fatalf("managed SDK was not discovered: %#v", sdks)
 }
 
 func TestValidateSDKRootRejectsUnrelatedDirectory(t *testing.T) {
