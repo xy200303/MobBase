@@ -200,7 +200,9 @@ func systemImagePackages(root string) []string {
 				continue
 			}
 			for _, abi := range abis {
-				if abi.IsDir() {
+				// sdkmanager leaves an .installer directory during a partial download;
+				// a usable system image is identified by its package.xml metadata.
+				if abi.IsDir() && fileExists(filepath.Join(root, api.Name(), vendor.Name(), abi.Name(), "package.xml")) {
 					packages = append(packages, strings.Join([]string{"system-images", api.Name(), vendor.Name(), abi.Name()}, ";"))
 				}
 			}

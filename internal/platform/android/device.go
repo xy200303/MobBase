@@ -585,10 +585,18 @@ func MirrorDeviceWithClient(ctx context.Context, nativeID, client string) error 
 	if strings.TrimSpace(client) == "" {
 		return fmt.Errorf("scrcpy client path is required")
 	}
-	if err := system.Start(ctx, client, []string{"--serial", nativeID}, nil, ""); err != nil {
+	if err := system.Start(ctx, client, mirrorClientArgs(nativeID), nil, ""); err != nil {
 		return fmt.Errorf("start Android device mirror: %w", err)
 	}
 	return nil
+}
+
+// mirrorClientArgs makes the mirror safe to use alongside normal desktop
+// context-menu habits. scrcpy's SDK mouse default maps a right click to the
+// Android Back key, which can unexpectedly close the foreground application.
+// Keep the remaining secondary shortcuts while leaving right click unbound.
+func mirrorClientArgs(nativeID string) []string {
+	return []string{"--serial", nativeID, "--mouse-bind=+hsn:++++"}
 }
 
 func containsPID(output string, expected int) bool {

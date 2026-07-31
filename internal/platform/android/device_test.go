@@ -2,6 +2,7 @@ package android
 
 import (
 	"context"
+	"reflect"
 	"testing"
 )
 
@@ -39,6 +40,14 @@ func TestDefaultEmulatorName(t *testing.T) {
 	name := DefaultEmulatorName("system-images;android-35;google_apis;x86_64")
 	if name != "mob-android-api-35" {
 		t.Fatalf("default AVD name = %q", name)
+	}
+}
+
+func TestMirrorClientArgsDisablesRightClickBack(t *testing.T) {
+	got := mirrorClientArgs("R58N123456A")
+	want := []string{"--serial", "R58N123456A", "--mouse-bind=+hsn:++++"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("mirror args = %#v, want %#v", got, want)
 	}
 }
 

@@ -15,6 +15,9 @@ func TestDiscoverInspectsRegisteredSDK(t *testing.T) {
 			t.Fatalf("create SDK component: %v", err)
 		}
 	}
+	if err := os.WriteFile(filepath.Join(root, "system-images/android-35/google_apis/x86_64/package.xml"), []byte("package"), 0o644); err != nil {
+		t.Fatalf("write system image metadata: %v", err)
+	}
 	config := state.Default()
 	config.Android.SDKs = []state.AndroidSDK{{Name: "shared", Path: root, Ownership: state.OwnershipImported}}
 	config.Android.CurrentSDK = "shared"
@@ -32,6 +35,26 @@ func TestDiscoverInspectsRegisteredSDK(t *testing.T) {
 		return
 	}
 	t.Fatalf("registered SDK was not discovered: %#v", sdks)
+}
+
+func TestDiscoverIgnoresPartialSystemImage(t *testing.T) {
+	root := t.TempDir()
+	partial := filepath.Join(root, "system-images/android-34/google_apis/x86_64/.installer")
+	if err := os.MkdirAll(partial, 0o755); err != nil {
+		t.Fatalf("create partial system image: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "platform-tools"), 0o755); err != nil {
+		t.Fatalf("create SDK marker: %v", err)
+	}
+	config := state.Default()
+	config.Android.SDKs = []state.AndroidSDK{{Name: "managed", Path: root, Ownership: state.OwnershipManaged}}
+	sdks, err := Discover(config)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if len(sdks) != 1 || len(sdks[0].Components.SystemImages) != 0 {
+		t.Fatalf("partial system image was treated as installed: %#v", sdks)
+	}
 }
 
 func TestValidateSDKRootRejectsUnrelatedDirectory(t *testing.T) {
