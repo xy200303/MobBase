@@ -582,28 +582,33 @@ VS Code 插件是 Mob CLI 的图形入口，不应自行管理 ADB、SDK 或 scr
 ### 第一阶段：当前 Android 交付
 
 - 工具链、诊断、设备、模拟器、项目创建、build/run/test/release/logs 和调试入口。
-- “Open Device Preview” 调用 `mob device open`：Android 模拟器使用官方 Emulator 窗口，真机使用 Mob 管理的低延迟预览窗口。
+- “Open Device Preview” 调用 `mob device preview serve android:<native-id> --json=events`，在 VS Code Webview 中打开同一套低延迟视频与控制会话；CLI 的 `mob device open` 仍保留给独立的官方窗口工作流。
 - “Capture Device Screenshot” 调用 `mob device screenshot` 后在 VS Code 中打开 PNG。
 - “Inspect Device UI” 调用 `mob device ui-tree --json`，在只读 Webview 中展示 UI Automator 层级；临时设备文件不暴露给插件。
 - Task Provider 只声明当前已交付的 Android 工作流，不将 iOS/HarmonyOS 的预留命名空间伪装成可用功能。
 
-### 第二阶段：CLI 本地预览服务
+### Mob Device Session Protocol
 
-内嵌实时预览不能用 ADB 截图轮询实现。CLI 需要新增受控的 `mob device preview serve <android:id> --json=events` 服务，职责包括：
+Mob 不将 scrcpy 作为跨平台协议。CLI、VS Code 和未来 IDE 统一采用版本化的 `mob.device.session.v1`：适配器返回平台、设备 ID、视频编码、短期本地 endpoint、一次性 token 和可用控制能力，客户端根据 `controls` 协商 UI。协议详细规定见 [MOB_DEVICE_SESSION_PROTOCOL.md](MOB_DEVICE_SESSION_PROTOCOL.md)。
 
-- 在 `127.0.0.1` 上分配短生命周期端口和随机会话令牌；不得监听局域网地址，也不得把令牌写入日志或持久化配置。
-- 使用 Android 设备的视频流能力输出 H.264/AVC 帧，并在设备断开、插件关闭或会话超时后停止对应进程和端口。
-- 仅接受已认证会话的触控、滚动、文本、返回、主页、截图和 UI 刷新请求；CLI 再通过 ADB/scrcpy 协议执行。
-- 以 JSON 事件返回服务地址、会话 ID、视频参数、设备状态和可机器处理的错误码。协议必须独立于 VS Code，供终端、自动化和未来 IDE 复用。
+Android 以 scrcpy/ADB 作为首个完整适配器；iOS 必须在 macOS 上通过 Apple 官方设备或 Simulator 服务实现，HarmonyOS 必须通过 HDC/DevEco 官方能力实现。平台可以只提供显示，此时仅声明 `close`，插件不会伪造可操作性。
 
-### 第三阶段：VS Code 内嵌预览
+### 已交付：CLI 本地预览服务
 
-插件新增 `Mob Preview` Webview：通过 CLI 返回的 loopback 会话连接视频流，用 WebCodecs 解码，按设备实际分辨率渲染，并将鼠标、触控和键盘事件转换为 CLI 协议消息。Webview 不直连 ADB、不保存令牌，也不自行下载 scrcpy。
+内嵌实时预览不使用 ADB 截图轮询。`mob device preview serve android:<native-id> --json=events` 会创建一次性的 Android 预览会话：
 
-- 真机和 Android 模拟器优先共用同一协议；设备重连时显示可恢复状态，不自动重试未经授权的新设备。
-- 预览工具栏提供暂停、刷新 UI 层级、截图、旋转和“在外部窗口打开”；所有按钮的可用性由 CLI 返回的 capability 决定。
-- iOS Simulator 与 HarmonyOS 只有在其官方工具提供等价、稳定的流和输入能力后接入；在此之前保持官方窗口或截图模式，不承诺内嵌控制。
-- 完成标准：Extension Host 自动化测试覆盖会话创建、断线、令牌拒绝、输入坐标转换和资源清理；真实 Android 真机与模拟器各完成一轮手工验证。
+- 服务只监听 `127.0.0.1` 的随机端口，并使用加密随机令牌认证；令牌仅出现在发起命令的 JSON `preview` 事件中，绝不写入日志或配置。
+- CLI 将 Mob 内置的 `scrcpy-server` 推送到设备，通过临时 ADB reverse 通道接收连续 Annex B H.264/AVC 帧；视频不经过截图轮询，也不受 `screenrecord` 的单段录制限制。Mob 只启用视频编码，设备输入仍由受管 ADB 执行。
+- `GET /video?token=<token>` 是视频 WebSocket。先发送包含 `codec` 和 `format` 的 JSON 配置消息，随后发送二进制包：1 字节关键帧标志、8 字节大端微秒时间戳、H.264 Annex B access unit。该端点属于 `mob.device.session.v1`，而不是 Android 专属公开协议。
+- `GET /control?token=<token>` 是控制 WebSocket。它接受 `tap`、`swipe`、`text`、`key` 和 `close` JSON 指令；前四种由 CLI 通过当前受管 SDK 的 ADB 执行，`close` 用于主动回收预览会话。不向 Webview 暴露 ADB 路径或进程。
+- 服务缓存最近的 H.264 关键帧。客户端在视频已开始后加入时会立即得到可解码画面，不必等待下一轮 IDR 帧。
+- 预览服务随 CLI 进程或上层客户端结束而回收；设备断开和流错误以标准 JSON 错误事件返回。协议独立于 VS Code，可供终端、自动化和未来 IDE 复用。
+
+### 已交付：VS Code 内嵌预览
+
+插件的 `Mob: Open Device Preview` 启动上述服务，在 `Mob Preview` Webview 中用 WebCodecs 解码 H.264，并以设备实际视频分辨率渲染。鼠标或触摸的点击与滑动会转换为同一会话的控制消息；面板同时提供文本输入、返回、主页和最近任务控制。令牌只在 Webview 的内存连接过程中存在，不写入工作区、设置或磁盘。
+
+真机和 Android 模拟器使用同一协议。iOS Simulator 与 HarmonyOS 只有在其官方工具提供等价、稳定的流和输入能力后接入；在此之前保持官方窗口或截图模式，不承诺内嵌控制。
 
 ## 13. 实施顺序
 

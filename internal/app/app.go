@@ -247,6 +247,8 @@ func (r runtime) device(ctx context.Context, args []string) error {
 		return r.deviceWait(ctx, args[1:])
 	case "input":
 		return r.deviceInput(ctx, args[1:])
+	case "preview":
+		return r.devicePreviewServe(ctx, args[1:])
 	case "record":
 		return r.deviceRecord(ctx, args[1:])
 	case "forward":
@@ -2024,7 +2026,7 @@ func completeHelpContract(data *helpResponse) {
 	case "mob build", "mob run", "mob debug", "mob test", "mob release", "mob release check", "mob logs":
 		data.Platforms = []string{"android"}
 		data.Prerequisites = []string{"Run from a recognized native Android or Flutter project."}
-	case "mob android doctor", "mob android sdk available", "mob android sdk install", "mob android ndk available", "mob android ndk install", "mob android emulator image available", "mob android emulator image install":
+	case "mob android doctor", "mob android sdk available", "mob android sdk install", "mob android ndk available", "mob android ndk install", "mob android emulator image available", "mob android emulator image install", "mob device preview serve":
 		data.Platforms = []string{"android"}
 	}
 	if eventStreamCommand(data.Command) {
@@ -2036,7 +2038,7 @@ func completeHelpContract(data *helpResponse) {
 
 func eventStreamCommand(command string) bool {
 	switch command {
-	case "mob android sdk install", "mob android ndk install", "mob android emulator create", "mob android emulator start", "mob java install", "mob flutter install", "mob flutter create", "mob fvm install", "mob fvm update", "mob build", "mob run", "mob debug", "mob test", "mob release", "mob logs":
+	case "mob android sdk install", "mob android ndk install", "mob android emulator create", "mob android emulator start", "mob java install", "mob flutter install", "mob flutter create", "mob fvm install", "mob fvm update", "mob build", "mob run", "mob debug", "mob test", "mob release", "mob logs", "mob device preview serve":
 		return true
 	default:
 		return false
@@ -2173,7 +2175,7 @@ func helpData(path string) (helpResponse, bool) {
 		base.Examples = []string{"mob android device pair 192.168.1.20:37123 --code 123456", "mob android device connect 192.168.1.20:5555"}
 		base.Related = []string{"mob device list"}
 	case "mob device":
-		base.Usage = "mob device <list|use|open|mirror|screenshot|ui-tree|record|forward> [--json]"
+		base.Usage = "mob device <list|use|open|mirror|preview|screenshot|ui-tree|input|wait|record|forward> [--json]"
 		base.Description = "List and operate on connected Android emulators and physical devices."
 		base.Platforms = []string{"android"}
 		base.Examples = []string{"mob device list", "mob device use android:emulator-5554"}
@@ -2640,6 +2642,13 @@ func helpData(path string) (helpResponse, bool) {
 		base.Examples = []string{"mob device mirror android:R58N123456A"}
 		base.Related = []string{"mob device list", "mob run"}
 		base.Errors = []string{"MOB_INVALID_ARGUMENT", "MOB_DEVICE_UNAVAILABLE", "MOB_TOOLCHAIN_MISSING"}
+	case "mob device preview serve":
+		base.Usage = "mob device preview serve <platform:native-id> --json=events"
+		base.Description = "Start a private loopback device video and control session. Android is currently supported; the returned session token is short-lived and must not be logged or persisted."
+		base.SideEffects = "starts a platform preview service; Android also creates a temporary ADB reverse tunnel and internal scrcpy H.264 stream until the client closes the command"
+		base.Examples = []string{"mob device preview serve android:emulator-5554 --json=events"}
+		base.Related = []string{"mob device open", "mob device input", "mob device screenshot"}
+		base.Errors = []string{"MOB_INVALID_ARGUMENT", "MOB_PLATFORM_NOT_SUPPORTED", "MOB_DEVICE_UNAVAILABLE", "MOB_TOOLCHAIN_MISSING", "MOB_COMMAND_FAILED"}
 	case "mob device forward":
 		base.Usage = "mob device forward remove android:<native-id> --port <1-65535> [--json]"
 		base.Description = "Remove a local ADB JDWP forward created for an Android debug session."

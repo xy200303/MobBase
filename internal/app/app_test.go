@@ -290,6 +290,37 @@ func TestDeviceOpenHelpContract(t *testing.T) {
 	}
 }
 
+func TestPreviewServeHelpAndJSONModeContract(t *testing.T) {
+	t.Setenv("MOB_HOME", t.TempDir())
+	var stdout, stderr bytes.Buffer
+	if exit := Run(context.Background(), []string{"help", "device", "preview", "serve", "--json"}, &stdout, &stderr); exit != 0 {
+		t.Fatalf("preview help exit = %d, stderr = %s", exit, stderr.String())
+	}
+	data := assertEvent(t, stdout.Bytes(), true, "mob help")["data"].(map[string]interface{})
+	if data["usage"] != "mob device preview serve <platform:native-id> --json=events" {
+		t.Fatalf("unexpected preview help: %s", stdout.String())
+	}
+
+	stdout.Reset()
+	if exit := Run(context.Background(), []string{"device", "preview", "serve", "android:emulator-5554", "--json"}, &stdout, &stderr); exit == 0 {
+		t.Fatal("preview service accepted standard JSON mode")
+	}
+	event := assertEvent(t, stdout.Bytes(), false, "mob device preview serve android:emulator-5554")
+	if event["error"].(map[string]interface{})["code"] != "MOB_INVALID_ARGUMENT" {
+		t.Fatalf("unexpected preview error: %s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if exit := Run(context.Background(), []string{"device", "preview", "serve", "ios:00000000-0000-0000-0000-000000000000", "--json=events"}, &stdout, &stderr); exit == 0 {
+		t.Fatal("preview service accepted an unsupported platform")
+	}
+	event = assertEvent(t, stdout.Bytes(), false, "mob device preview serve ios:00000000-0000-0000-0000-000000000000")
+	if event["error"].(map[string]interface{})["code"] != "MOB_PLATFORM_NOT_SUPPORTED" {
+		t.Fatalf("unexpected unsupported platform error: %s", stdout.String())
+	}
+}
+
 func TestHelpSupportsMarkdownAndStructuredJSONFormats(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if exit := Run(context.Background(), []string{"help", "run", "--format", "markdown"}, &stdout, &stderr); exit != 0 {

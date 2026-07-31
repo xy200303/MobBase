@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { ActiveMobProcess, MobClient, MobCommandError, MobEvent, workspaceDirectory } from "./mobClient";
-import { captureDeviceScreenshot, inspectDeviceUI, selectReadyAndroidDevice } from "./deviceTools";
+import { captureDeviceScreenshot, inspectDeviceUI } from "./deviceTools";
 import { createAndroidEmulator, startAndroidEmulator, stopAndroidEmulator } from "./emulators";
 import { selectAndInstallToolchain } from "./install";
+import { openLivePreview } from "./preview";
 import { MobTaskProvider } from "./tasks";
 import { DeviceTreeItem, DevicesTreeDataProvider, MobDevice, ToolchainsTreeDataProvider } from "./views";
 import { showMobError, startWorkflow } from "./workflow";
@@ -62,7 +63,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("mob.debug", () => startDebug(client, output)),
     vscode.commands.registerCommand("mob.stopDebug", () => stopDebug()),
     vscode.commands.registerCommand("mob.selectDevice", (item?: DeviceTreeItem) => selectDevice(client, devices, status, item?.device)),
-    vscode.commands.registerCommand("mob.openDevice", (item?: DeviceTreeItem) => openDevice(client, item?.device)),
+    vscode.commands.registerCommand("mob.openDevice", (item?: DeviceTreeItem) => openLivePreview(context, client, item?.device)),
     vscode.commands.registerCommand("mob.captureDeviceScreenshot", (item?: DeviceTreeItem) => captureDeviceScreenshot(client, item)),
     vscode.commands.registerCommand("mob.inspectDeviceUI", (item?: DeviceTreeItem) => inspectDeviceUI(client, item)),
     vscode.commands.registerCommand("mob.connectDevice", () => connectDevice(client, devices)),
@@ -274,18 +275,6 @@ async function pairDevice(client: MobClient, devices: DevicesTreeDataProvider): 
         void connectDevice(client, devices);
       }
     });
-  } catch (error) {
-    showError(error);
-  }
-}
-
-async function openDevice(client: MobClient, device?: MobDevice): Promise<void> {
-  const selected = await selectReadyAndroidDevice(client, device);
-  if (!selected) {
-    return;
-  }
-  try {
-    await client.query(["device", "open", selected.id]);
   } catch (error) {
     showError(error);
   }

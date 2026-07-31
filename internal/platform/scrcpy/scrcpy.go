@@ -11,7 +11,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -102,6 +104,33 @@ func RuntimeExecutable(home string) (string, bool) {
 	path := filepath.Join(RuntimeRoot(home), "scrcpy.exe")
 	info, err := os.Stat(path)
 	return path, err == nil && !info.IsDir()
+}
+
+// RuntimeServer returns the official server shipped alongside the managed
+// scrcpy client. It is used for Mob's loopback video protocol, never exposed
+// as a user-managed Android SDK component.
+func RuntimeServer(home string) (string, bool) {
+	path := filepath.Join(RuntimeRoot(home), "scrcpy-server")
+	info, err := os.Stat(path)
+	return path, err == nil && !info.IsDir()
+}
+
+var versionLine = regexp.MustCompile(`(?m)^scrcpy\s+([^\s]+)`)
+
+// RuntimeVersion obtains the server-compatible version from the bundled
+// native client. scrcpy rejects a server invocation with a mismatched client
+// version, so the version must never be guessed by the caller.
+func RuntimeVersion(ctx context.Context, executable string) (string, error) {
+	command := exec.CommandContext(ctx, executable, "--version")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("read scrcpy runtime version: %w", err)
+	}
+	match := versionLine.FindStringSubmatch(string(output))
+	if len(match) != 2 || strings.TrimSpace(match[1]) == "" {
+		return "", fmt.Errorf("read scrcpy runtime version: unexpected output")
+	}
+	return strings.TrimSpace(match[1]), nil
 }
 
 func Install(ctx context.Context, destination, cache string, release Release, report func(Progress)) error {

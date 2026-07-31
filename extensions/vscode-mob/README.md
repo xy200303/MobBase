@@ -10,11 +10,13 @@ The extension intentionally keeps SDK installation, Android Emulator, ADB, proje
 
 The Devices view lists the same Android devices that `mob device list` returns. Its context actions operate only on ready Android devices:
 
-- **Open Device** opens Mob's live device preview. Android virtual devices use the official Emulator window; physical devices use Mob's managed preview runtime.
+- **Open Device** opens `Mob Preview` inside VS Code. It starts a private local H.264 video/control session through the Mob CLI and works with both Android virtual devices and physical devices.
 - **Capture Device Screenshot** saves a PNG through ADB and opens it in VS Code.
 - **Inspect Device UI** requests `mob device ui-tree --json` and displays the current UI Automator hierarchy in a read-only editor panel. No Android temporary paths are passed to the extension.
 
-An embedded real-time video panel is planned separately. It requires a loopback preview service from the Mob CLI so video, touch input, authentication, and cleanup remain consistent for terminal, VS Code, and automation clients. The current **Open Device** command intentionally opens the CLI-managed preview rather than using low-frequency screenshot polling.
+`Mob Preview` is a real H.264 video stream, not screenshot polling. The CLI starts its internal scrcpy server on the selected device, connects it through a temporary ADB reverse tunnel, then binds the local service to `127.0.0.1`. A fresh session token is sent only to the extension through `mob device preview serve <device> --json=events`; the Webview keeps it in memory only. Click or touch the screen to tap and swipe; the footer controls send text, Back, Home, and Recent Apps commands through the same authenticated session. Closing the preview stops the CLI service, scrcpy stream, and temporary reverse tunnel.
+
+The extension consumes Mob's versioned `mob.device.session.v1` contract rather than an Android-only protocol. The session declares its platform, video format, and supported controls, so later iOS and HarmonyOS adapters can use the same preview surface without pretending every platform supports Android-level device control. The complete protocol is documented in the repository at `docs/MOB_DEVICE_SESSION_PROTOCOL.md`.
 
 ## Toolchains view
 
