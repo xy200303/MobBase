@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	gort "runtime"
 	"testing"
 
 	"github.com/xy200303/MobBase/internal/platform/android"
@@ -61,13 +62,17 @@ func TestRunProjectCommandForwardsFlutterCommand(t *testing.T) {
 
 func TestRunProjectCommandUsesKotlinMultiplatformAppModule(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "gradlew.bat"), []byte("@echo off"), 0o644); err != nil {
+	wrapper := "gradlew"
+	if gort.GOOS == "windows" {
+		wrapper = "gradlew.bat"
+	}
+	if err := os.WriteFile(filepath.Join(root, wrapper), []byte("wrapper"), 0o644); err != nil {
 		t.Fatalf("write Gradle Wrapper: %v", err)
 	}
 	info := &project.Info{Kind: project.KindKotlinMultiplatform, Root: root}
 	application := &project.AndroidApplication{Module: ":androidApp", ApplicationID: "com.example.kmp"}
 	program, arguments, launches, applicationID, err := runProjectCommand(info, nil, "emulator-5554", application)
-	if err != nil || program != filepath.Join(root, "gradlew.bat") || !reflect.DeepEqual(arguments, []string{":androidApp:installDebug"}) || !launches || applicationID != "com.example.kmp" {
+	if err != nil || program != filepath.Join(root, wrapper) || !reflect.DeepEqual(arguments, []string{":androidApp:installDebug"}) || !launches || applicationID != "com.example.kmp" {
 		t.Fatalf("unexpected KMP command: %q %#v %t %q %v", program, arguments, launches, applicationID, err)
 	}
 }
