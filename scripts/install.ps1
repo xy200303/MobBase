@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $releaseAPI = "https://api.github.com/repos/xy200303/MobBase/releases"
+$latestReleaseURL = "https://github.com/xy200303/MobBase/releases/latest"
 
 function Write-InstallError([string]$Message) {
     Write-Error "Mob installation failed: $Message"
@@ -29,19 +30,83 @@ function Add-UserPath([string]$Directory) {
     }
 }
 
+function Get-ResponseHeader([object]$Response, [string]$Name) {
+    if ($null -eq $Response -or $null -eq $Response.Headers) {
+        return $null
+    }
+
+    $value = $null
+    try {
+        $value = $Response.Headers[$Name]
+    } catch {
+        # HttpResponseHeaders does not support the indexer on all PowerShell versions.
+    }
+    if ($null -eq $value) {
+        try {
+            $value = $Response.Headers.GetValues($Name)
+        } catch {
+            # The header is absent or this response implementation has no GetValues method.
+        }
+    }
+    if ($null -eq $value) {
+        try {
+            $value = $Response.Headers.$Name
+        } catch {
+            # Keep the caller's fallback path available.
+        }
+    }
+    if ($value -is [System.Collections.IEnumerable] -and $value -isnot [string]) {
+        $value = @($value | Select-Object -First 1)[0]
+    }
+    if ($null -eq $value) {
+        return $null
+    }
+    return [string]$value
+}
+
+function Resolve-LatestReleaseTagFromRedirect {
+    $response = $null
+    try {
+        $response = Invoke-WebRequest -Uri $latestReleaseURL -MaximumRedirection 0 -Headers @{ "User-Agent" = "MobBase-Installer" } -ErrorAction Stop
+    } catch {
+        if ($null -ne $_.Exception.Response) {
+            $response = $_.Exception.Response
+        } else {
+            return $null
+        }
+    }
+
+    $location = Get-ResponseHeader $response "Location"
+    if ([string]::IsNullOrWhiteSpace($location)) {
+        return $null
+    }
+    $match = [regex]::Match($location, "/releases/tag/([^/?#]+)")
+    if (-not $match.Success) {
+        return $null
+    }
+    return [uri]::UnescapeDataString($match.Groups[1].Value)
+}
+
 function Resolve-ReleaseTag([string]$RequestedVersion) {
     if ($RequestedVersion -ne "latest") {
         return $RequestedVersion
     }
+
+    $tag = Resolve-LatestReleaseTagFromRedirect
+    if (-not [string]::IsNullOrWhiteSpace($tag)) {
+        return $tag
+    }
+
     try {
         $release = Invoke-RestMethod -Uri "$releaseAPI/latest" -Headers @{ "User-Agent" = "MobBase-Installer" }
+        if (-not [string]::IsNullOrWhiteSpace($release.tag_name)) {
+            return $release.tag_name
+        }
     } catch {
-        Write-InstallError "Could not resolve the latest GitHub Release: $($_.Exception.Message)"
+        Write-Verbose "GitHub Release API fallback failed: $($_.Exception.Message)"
     }
-    if ([string]::IsNullOrWhiteSpace($release.tag_name)) {
-        Write-InstallError "The latest GitHub Release does not contain a tag name."
-    }
-    return $release.tag_name
+
+    Write-InstallError "Could not resolve the latest Mob Release. GitHub Releases and the GitHub API were both unavailable. Retry later or specify a release explicitly, for example: -Version v0.1.9"
 }
 
 function Get-MobDataHome {

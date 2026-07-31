@@ -2,6 +2,7 @@
 set -euo pipefail
 
 RELEASE_API="https://api.github.com/repos/xy200303/MobBase/releases"
+LATEST_RELEASE_URL="https://github.com/xy200303/MobBase/releases/latest"
 VERSION="latest"
 SOURCE_PATH=""
 INSTALL_DIR=""
@@ -82,8 +83,12 @@ else
     *) fail "No Mob release artifact is defined for $(uname -s) $(uname -m). Use --source to build locally." ;;
   esac
   if [[ "$VERSION" == "latest" ]]; then
-    VERSION="$(curl -fsSL -H 'User-Agent: MobBase-Installer' "$RELEASE_API/latest" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
-    [[ -n "$VERSION" ]] || fail "Could not resolve the latest GitHub Release tag."
+    RELEASE_LOCATION="$(curl -fsSI --max-redirs 0 -H 'User-Agent: MobBase-Installer' "$LATEST_RELEASE_URL" 2>/dev/null | awk 'BEGIN { IGNORECASE=1 } /^location:/ { print $2 }' | tr -d '\r' | tail -n 1 || true)"
+    VERSION="$(printf '%s' "$RELEASE_LOCATION" | sed -n 's#.*/releases/tag/\([^/?#]*\).*#\1#p')"
+    if [[ -z "$VERSION" ]]; then
+      VERSION="$(curl -fsSL -H 'User-Agent: MobBase-Installer' "$RELEASE_API/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1 || true)"
+    fi
+    [[ -n "$VERSION" ]] || fail "Could not resolve the latest Mob Release. GitHub Releases and the GitHub API were both unavailable. Retry later or use --version <tag>."
   fi
   ASSET_URL="https://github.com/xy200303/MobBase/releases/download/$VERSION/$ASSET_NAME"
   CACHE_ROOT="${MOB_HOME:-$HOME/.mob}/cache/releases"
