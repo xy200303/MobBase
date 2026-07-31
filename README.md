@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  <a href="README.md">简体中文</a> · <a href="README-EN.md">English</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/xy200303/MobBase/releases"><img src="https://img.shields.io/github/v/release/xy200303/MobBase?style=flat-square&label=release" alt="GitHub Release" /></a>
   <a href="https://github.com/xy200303/MobBase/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/xy200303/MobBase/release.yml?style=flat-square&label=release%20pipeline" alt="Release pipeline" /></a>
   <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/xy200303/MobBase?style=flat-square&label=go" alt="Go version" /></a>
@@ -22,6 +26,7 @@
   <a href="#为什么选择-mob">为什么选择 Mob</a> ·
   <a href="#ai-与自动化接口">AI 与自动化接口</a> ·
   <a href="#vs-code-扩展">VS Code 扩展</a> ·
+  <a href="CONTRIBUTING.md">参与贡献</a> ·
   <a href="docs/PRODUCT_PLAN.md">产品规范</a> ·
   <a href="docs/MANUAL_VALIDATION.md">手动验证</a>
 </p>
@@ -114,7 +119,7 @@ mob doctor
 mob run --accept-licenses
 ```
 
-`mob run` 会识别当前项目。对于原生 Android 与 Kotlin Multiplatform Android 目标，它调用项目 Gradle Wrapper；对于 Flutter Android 目标，它调用项目的 Flutter 或 FVM 工作流。缺少 SDK Platform、Build Tools、NDK、JDK、ADB 或 Emulator 时，Mob 会在许可确认后准备可自动安装的组件。没有可用设备时，默认可创建与项目 API 匹配的 Mob 托管 AVD。
+`mob run` 会识别当前项目。对于原生 Android，它调用项目 Gradle Wrapper；对于 Kotlin Multiplatform/KUIKLY Android 项目，它定位唯一的 Android 应用模块并执行 `:<module>:installDebug`，随后通过 ADB 启动该模块的 `applicationId`；对于 Flutter Android 目标，它调用项目的 Flutter 或 FVM 工作流。缺少 SDK Platform、Build Tools、NDK、JDK、ADB 或 Emulator 时，Mob 会在许可确认后准备可自动安装的组件。没有可用设备时，默认可创建与项目 API 匹配的 Mob 托管 AVD。
 
 ### 创建并运行原生 Android 项目
 
@@ -252,3 +257,7 @@ npm run compile
 2. 持续完善 Android 项目类型的识别与工具链兼容性。
 3. 在 macOS 上基于 Xcode 接入 iOS 工具链和设备工作流。
 4. 基于 DevEco 和公开官方 SDK 接入 HarmonyOS 工具链和设备工作流。
+
+## 开源协作
+
+欢迎提交 Bug 报告、设备兼容性反馈、项目识别案例和文档改进。提交代码前请阅读[贡献说明](CONTRIBUTING.md)；本项目采用 [MIT License](LICENSE)。

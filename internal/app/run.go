@@ -55,8 +55,16 @@ func (r runtime) runAs(ctx context.Context, args []string, command string) error
 	if platform != "android" {
 		return &codedError{Code: "MOB_PLATFORM_NOT_SUPPORTED", Message: "Android is the only run platform implemented in this Mob release.", Remediation: "Choose --platform android for a project that declares an Android target."}
 	}
-	if currentProject.Kind != project.KindAndroid && currentProject.Kind != project.KindFlutter {
+	if currentProject.Kind != project.KindAndroid && currentProject.Kind != project.KindFlutter && currentProject.Kind != project.KindKotlinMultiplatform {
 		return &codedError{Code: "MOB_RUNNER_UNAVAILABLE", Message: "The " + string(currentProject.Kind) + " run adapter is not available yet.", Remediation: "Use the framework's official runner for now, or run a native Android Gradle project with mob run."}
+	}
+	var androidApplication *project.AndroidApplication
+	if currentProject.Kind == project.KindKotlinMultiplatform && len(options.Command) == 0 {
+		application, err := project.KotlinMultiplatformAndroidApplication(currentProject.Root)
+		if err != nil {
+			return &codedError{Code: "MOB_RUNNER_UNAVAILABLE", Message: err.Error(), Remediation: "Include exactly one Android application module with com.android.application and an explicit applicationId, or pass the project's official run command after --."}
+		}
+		androidApplication = &application
 	}
 	sdk, requirements, err := r.prepareAndroidSDK(ctx, currentProject.Root, command, true, options.NoInstall, options.AcceptLicenses)
 	if err != nil {
@@ -123,7 +131,7 @@ func (r runtime) runAs(ctx context.Context, args []string, command string) error
 			return err
 		}
 	}
-	program, commandArgs, launchesApplication, applicationID, err := runProjectCommand(currentProject, options.Command, device.NativeID)
+	program, commandArgs, launchesApplication, applicationID, err := runProjectCommand(currentProject, options.Command, device.NativeID, androidApplication)
 	if err != nil {
 		return err
 	}
@@ -135,9 +143,13 @@ func (r runtime) runAs(ctx context.Context, args []string, command string) error
 		commandArgs = append(commandArgs, "--machine")
 	}
 	if launchesApplication {
-		applicationID, err = project.AndroidApplicationID(currentProject.Root)
-		if err != nil {
-			return &codedError{Code: "MOB_RUNNER_UNAVAILABLE", Message: err.Error(), Remediation: "Declare applicationId in the Android app Gradle module, or pass an explicit command after --."}
+		if androidApplication != nil {
+			applicationID = androidApplication.ApplicationID
+		} else {
+			applicationID, err = project.AndroidApplicationID(currentProject.Root)
+			if err != nil {
+				return &codedError{Code: "MOB_RUNNER_UNAVAILABLE", Message: err.Error(), Remediation: "Declare applicationId in the Android app Gradle module, or pass an explicit command after --."}
+			}
 		}
 	}
 	program, commandArgs = replaceRunTokens(program, commandArgs, device)
@@ -177,10 +189,17 @@ func (r runtime) runAs(ctx context.Context, args []string, command string) error
 	return nil
 }
 
-func runProjectCommand(info *project.Info, forwarded []string, nativeDeviceID string) (string, []string, bool, string, error) {
+func runProjectCommand(info *project.Info, forwarded []string, nativeDeviceID string, androidApplication *project.AndroidApplication) (string, []string, bool, string, error) {
 	if info.Kind == project.KindFlutter {
 		program, args, err := flutterRunCommand(info.Root, forwarded, nativeDeviceID)
 		return program, args, false, "", err
+	}
+	if info.Kind == project.KindKotlinMultiplatform && androidApplication != nil && len(forwarded) == 0 {
+		program, _, _, _, err := runCommand(info.Root, nil)
+		if err != nil {
+			return "", nil, false, "", err
+		}
+		return program, []string{androidApplication.Module + ":installDebug"}, true, androidApplication.ApplicationID, nil
 	}
 	return runCommand(info.Root, forwarded)
 }

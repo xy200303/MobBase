@@ -1,6 +1,8 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -51,9 +53,22 @@ func TestParseEmulatorCreate(t *testing.T) {
 
 func TestRunProjectCommandForwardsFlutterCommand(t *testing.T) {
 	info := &project.Info{Kind: project.KindFlutter, Root: t.TempDir()}
-	program, arguments, launches, _, err := runProjectCommand(info, []string{"fvm", "flutter", "run"}, "emulator-5554")
+	program, arguments, launches, _, err := runProjectCommand(info, []string{"fvm", "flutter", "run"}, "emulator-5554", nil)
 	if err != nil || program != "fvm" || !reflect.DeepEqual(arguments, []string{"flutter", "run"}) || launches {
 		t.Fatalf("unexpected Flutter run command: %q %#v %t %v", program, arguments, launches, err)
+	}
+}
+
+func TestRunProjectCommandUsesKotlinMultiplatformAppModule(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "gradlew.bat"), []byte("@echo off"), 0o644); err != nil {
+		t.Fatalf("write Gradle Wrapper: %v", err)
+	}
+	info := &project.Info{Kind: project.KindKotlinMultiplatform, Root: root}
+	application := &project.AndroidApplication{Module: ":androidApp", ApplicationID: "com.example.kmp"}
+	program, arguments, launches, applicationID, err := runProjectCommand(info, nil, "emulator-5554", application)
+	if err != nil || program != filepath.Join(root, "gradlew.bat") || !reflect.DeepEqual(arguments, []string{":androidApp:installDebug"}) || !launches || applicationID != "com.example.kmp" {
+		t.Fatalf("unexpected KMP command: %q %#v %t %q %v", program, arguments, launches, applicationID, err)
 	}
 }
 

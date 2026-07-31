@@ -54,7 +54,7 @@ func TestDetectKotlinMultiplatformBeforeAndroid(t *testing.T) {
 func TestDetectKotlinMultiplatformTargetsFromIncludedModule(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "settings.gradle.kts"), "rootProject.name = \"sample\"\ninclude(\":shared\", \":feature:ui\")")
-	writeFile(t, filepath.Join(root, "build.gradle.kts"), "plugins { alias(libs.plugins.android.application) apply false }")
+	writeFile(t, filepath.Join(root, "build.gradle.kts"), "plugins { id(\"com.android.application\") version \"8.7.0\" apply false }")
 	writeFile(t, filepath.Join(root, "shared", "build.gradle.kts"), "plugins { kotlin(\"multiplatform\") }\nkotlin { androidTarget(); iosArm64() }")
 	writeFile(t, filepath.Join(root, "feature", "ui", "build.gradle.kts"), "plugins {}")
 
@@ -157,6 +157,38 @@ func TestAndroidApplicationID(t *testing.T) {
 	applicationID, err := AndroidApplicationID(root)
 	if err != nil || applicationID != "com.example.notes" {
 		t.Fatalf("application ID = %q, err = %v", applicationID, err)
+	}
+}
+
+func TestKotlinMultiplatformAndroidApplication(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "settings.gradle.kts"), "include(\":shared\", \":androidApp\")")
+	writeFile(t, filepath.Join(root, "shared", "build.gradle.kts"), "plugins { kotlin(\"multiplatform\") }")
+	writeFile(t, filepath.Join(root, "androidApp", "build.gradle.kts"), "plugins { id(\"com.android.application\") }\nandroid { defaultConfig { applicationId = \"com.example.kmp\" } }")
+	application, err := KotlinMultiplatformAndroidApplication(root)
+	if err != nil || application.Module != ":androidApp" || application.ApplicationID != "com.example.kmp" {
+		t.Fatalf("application = %#v, err = %v", application, err)
+	}
+}
+
+func TestKotlinMultiplatformAndroidApplicationRejectsAmbiguousModules(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "settings.gradle.kts"), "include(\":demo\", \":sample\")")
+	writeFile(t, filepath.Join(root, "demo", "build.gradle.kts"), "plugins { id(\"com.android.application\") }")
+	writeFile(t, filepath.Join(root, "sample", "build.gradle.kts"), "plugins { id(\"com.android.application\") }")
+	if _, err := KotlinMultiplatformAndroidApplication(root); err == nil {
+		t.Fatal("expected ambiguous Android application modules to fail")
+	}
+}
+
+func TestKotlinMultiplatformAndroidApplicationIgnoresRootApplyFalse(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "settings.gradle.kts"), "include(\":androidApp\")")
+	writeFile(t, filepath.Join(root, "build.gradle.kts"), "plugins { id(\"com.android.application\") version \"8.7.0\" apply false }")
+	writeFile(t, filepath.Join(root, "androidApp", "build.gradle.kts"), "plugins { id(\"com.android.application\") }\nandroid { defaultConfig { applicationId = \"com.example.kmp\" } }")
+	application, err := KotlinMultiplatformAndroidApplication(root)
+	if err != nil || application.Module != ":androidApp" {
+		t.Fatalf("application = %#v, err = %v", application, err)
 	}
 }
 
