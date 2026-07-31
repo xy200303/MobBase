@@ -2,17 +2,17 @@
 
 ## 0. 产品目标与交付范围
 
-Mob 的产品目标是让开发者使用 VS Code 完成 Android 日常开发，而不必为了安装 SDK、配置 ADB/JDK/Emulator 和处理多版本环境去安装完整 Android Studio。Android SDK、Build Tools、NDK、JDK、ADB 与 Emulator 仍然是官方必需工具；Mob 的职责是把它们按项目发现、安装、选择并交给正确的官方构建器。
+Mob 的长期产品目标是让开发者使用 VS Code 完成 Android、iOS 与 HarmonyOS 的日常开发，不必为每个平台手工拼装 SDK、NDK、JDK、设备桥接、模拟器和环境变量。平台官方工具仍然存在；Mob 的职责是按项目发现、安装、选择并交给正确的官方构建器。
 
 同一个能力必须同时服务三类调用方：人在终端中的命令、VS Code 插件的可视化操作，以及 AI/CI 的机器调用。三者不得各自维护 SDK 路径、设备状态或环境变量，也不得依赖解析不稳定的人类输出。
 
-当前版本以 Android 为唯一完整交付重点：Android SDK/NDK/JDK、Flutter Android、ADB、模拟器、真机、构建、运行、调试、测试、日志、发布构建和 VS Code 入口均属于本阶段范围。
+当前版本以 Android 为唯一完整交付重点：Android SDK/NDK/JDK、Flutter Android、ADB、模拟器、真机、构建、运行、调试、测试、日志、发布构建和 VS Code 入口均属于本阶段范围。Android 是跨平台产品愿景的第一个完整适配器，而不是产品命名空间的终点。
 
 iOS 与 HarmonyOS 仅保留稳定的平台命名空间和设计边界，不是当前跨平台交付承诺。后续版本分别基于 Xcode 与 DevEco 的官方能力接入，不复用 Android SDK/NDK，不绕过平台许可证、账号、证书或宿主机限制。
 
 ## 1. 产品定位
 
-Mob 是移动开发环境管理 CLI，定位类似 `nvm`：发现已有工具链、安装缺失组件、管理多个版本，并把正确环境交给当前项目的官方构建工具。它不是新的 IDE，也不是新的构建系统。
+Mob 是移动开发环境管理 CLI，定位类似 `nvm`：发现已有工具链、安装缺失组件、管理多个版本，并把正确环境交给当前项目的官方构建工具。它不是新的 IDE，也不是新的构建系统；它是 VS Code、终端、AI 与官方移动端工具之间的统一入口。
 
 Mob 不替代 Gradle、Flutter、FVM、Xcode、DevEco 或语言调试器，也不要求卸载 Android Studio。项目仍由自身的 Gradle Wrapper、Flutter/FVM 配置和官方构建入口维护。Android Studio 仍适合布局可视化编辑、Profiler 与专项诊断，但不应成为日常 build/run/debug 的前置条件。
 
@@ -26,7 +26,7 @@ AI / CI：读取命令契约与结构化状态，执行受控工作流，不猜�
 ## 2. 核心原则
 
 - 零项目配置：Mob 不创建 `mob.yaml`，不向项目写入配置文件。
-- VS Code 优先：Android 的日常开发路径必须可由 VS Code 集成终端或 Mob 扩展完成，不以 Android Studio 为前置依赖。
+- VS Code 优先：每个已交付平台的日常开发路径必须可由 VS Code 集成终端或 Mob 扩展完成。Android 不以 Android Studio 为前置依赖；iOS 与 HarmonyOS 保留 Xcode、DevEco 和宿主机的官方要求。
 - 项目优先：每次执行都从 Gradle、`pubspec.yaml`、`package.json`、Xcode、DevEco 等现有文件识别需求。
 - 平台隔离：Android、iOS、HarmonyOS 的路径、缓存、工具和子进程环境彼此隔离。
 - 按次注入：日常 `build`、`run`、`debug` 只给本次子进程注入工具链，不修改用户全局环境变量。

@@ -1,10 +1,12 @@
 # Mob for VS Code
 
-Mob for VS Code makes the `mob` CLI available inside the editor. Its purpose is straightforward: use VS Code for everyday Android work without installing Android Studio solely to set up SDK paths, ADB, JDK, Build Tools, or an emulator.
+Mob for VS Code is the one-click entry point for mobile development environments inside the editor. Mob's direction is to let developers use VS Code for Android, iOS, and HarmonyOS projects without separately assembling SDKs, device bridges, simulators, environment variables, and platform-specific command chains.
 
-The extension is a visual client, not a second Android environment manager. The Go CLI discovers or prepares the official Android tools, selects the environment required by the open project, invokes its Gradle Wrapper or Flutter/FVM command, and exposes structured results. This keeps the terminal, VS Code, CI, and AI-assisted workflows on the same toolchain and command contract.
+Android is the current complete workflow: use VS Code without installing Android Studio solely to set up SDK paths, ADB, JDK, Build Tools, or an emulator. iOS and HarmonyOS have the shared platform boundary and protocol in place, but their complete toolchain and device workflows are still being implemented.
 
-Android Studio remains useful for layout tooling, Profiler, and specialised diagnostics. It is not required for the normal build, run, debug, device, and environment-preparation path that Mob supports.
+The extension is a visual client, not a second environment manager. The Go CLI discovers or prepares the official Android tools, selects the environment required by the open project, invokes its Gradle Wrapper or Flutter/FVM command, and exposes structured results. Future iOS and HarmonyOS adapters follow the same command contract while using their official tooling. This keeps the terminal, VS Code, CI, and AI-assisted workflows on one toolchain and device model.
+
+Android Studio remains useful for layout tooling, Profiler, and specialised diagnostics. It is not required for the normal Android build, run, debug, device, and environment-preparation path that Mob supports. Future Apple and HarmonyOS workflows will retain the same honest boundary around Xcode and DevEco requirements.
 
 ## Before You Start
 

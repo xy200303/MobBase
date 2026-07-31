@@ -5,8 +5,8 @@
 <h1 align="center">Mob</h1>
 
 <p align="center">
-  <strong>在 VS Code 中完成 Android 开发，不必安装完整 Android Studio，也不必手工配置环境。</strong><br />
-  Mob 按项目准备 Android 工具链，并提供适合终端、VS Code、CI 与 AI 工具调用的统一入口。
+  <strong>在 VS Code 中一键启用移动端开发环境。</strong><br />
+  不再手工配置 SDK、NDK、JDK、设备桥接、模拟器和环境变量。
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 
 <p align="center">
   <a href="#快速开始">快速开始</a> ·
-  <a href="#为什么需要-mob">为什么需要 Mob</a> ·
+  <a href="#为什么选择-mob">为什么选择 Mob</a> ·
   <a href="#ai-与自动化接口">AI 与自动化接口</a> ·
   <a href="#vs-code-扩展">VS Code 扩展</a> ·
   <a href="docs/PRODUCT_PLAN.md">产品规范</a> ·
@@ -28,24 +28,28 @@
 
 ---
 
-## 目标
+## 一个入口，启用移动端开发
 
-Android 开发的难点经常不在代码，而在开发机：Android SDK、Build Tools、NDK、JDK、ADB、Emulator、系统镜像、Gradle 和环境变量相互影响。Android Studio 能集中处理其中一部分，但对习惯使用 VS Code 的开发者来说，安装完整 IDE 和反复配置本机环境成本很高。
+移动端项目不该因为换了一台电脑、换了一个 SDK 版本或换了一个平台，就重新经历 IDE 安装、工具链下载、环境变量配置和设备连接。Mob 的目标是让开发者在 VS Code 中使用一个 CLI 或一个插件，完成 Android、iOS 与 HarmonyOS 的环境准备、设备管理、构建、运行和调试。
 
-Mob 的目标很明确：**让 VS Code 成为 Android 日常开发入口，让环境准备变成一个命令或一次插件操作。**
+你不需要记住 SDK 在哪里、哪个 JDK 能构建、如何创建匹配 API 的模拟器，或如何把 AI 生成的代码真正运行到设备上。打开项目后，点击 **Run** 或执行：
 
-Mob 使用 Android 官方 command-line tools、Gradle Wrapper、ADB 与 Emulator。它不伪造或替代这些工具，而是负责发现、下载、版本选择、设备选择与本次进程的环境注入。项目仍是标准 Android、Flutter 或 Kotlin Multiplatform 项目，可以随时使用 Gradle、Flutter 或 Android Studio 打开。
+```powershell
+mob run --accept-licenses
+```
 
-Android Studio 仍适合布局可视化编辑、Profiler 和少数专项诊断；它不再是构建、运行、调试 Android 项目的必要前提。
+Mob 读取项目已有配置，准备匹配的官方工具链，选择真机或模拟器，并调用项目原本的构建器。它不创建私有项目格式，不替代 Gradle、Flutter/FVM、Xcode 或 DevEco。
 
-## 为什么需要 Mob
+**Android 是当前完整交付的平台。** iOS 与 HarmonyOS 正在按各自官方工具链接入。Android Studio 仍可用于布局编辑、Profiler 等高级功能，但不再是 Android 日常环境配置与运行项目的前置。未来 iOS 与 HarmonyOS 仍将遵循 Xcode、DevEco、账号、签名和宿主系统的官方要求。
+
+## 为什么选择 Mob
 
 | 常见问题 | Mob 的处理方式 |
 | --- | --- |
 | 新电脑上没有 SDK、ADB、JDK 或模拟器 | 从官方目录按需准备缺失组件，并在许可确认后继续工作流。 |
 | VS Code 需要手动设置 SDK 路径、PATH 与环境变量 | CLI 与扩展共用 Mob 管理的工具链；构建时只向子进程注入环境。 |
 | 一个项目用 API 27，另一个项目用 API 35 或不同 NDK/JDK | 从当前项目的 Gradle 配置推导需求，按项目选择工具链。 |
-| 真机、模拟器与无线调试入口分散 | 使用统一设备模型列出、选择、连接和启动设备。 |
+| Android、iOS、HarmonyOS 的工具与设备入口彼此割裂 | 使用统一的平台命名空间、设备模型和工作流；平台适配按官方能力逐步交付。 |
 | AI 编程工具只能猜测本机环境和命令结果 | 使用稳定的 `--json`、`--json=events`、错误码和 UI 自动化命令。 |
 
 Mob 不会创建 `mob.yaml`，不会改写 `build.gradle`、Flutter 配置或 `.fvmrc`，也不会永久设置 `JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT`。它管理自己的目录，默认位于 `~/.mob`。
@@ -55,10 +59,10 @@ Mob 不会创建 `mob.yaml`，不会改写 `build.gradle`、Flutter 配置或 `.
 | 平台 | 状态 | 当前能力 |
 | --- | --- | --- |
 | Android | 已交付 | SDK、NDK、JDK、ADB、Emulator、真机、Flutter/FVM、构建、运行、调试、测试、日志、发布构建与 VS Code 设备预览。 |
-| iOS | 规划中 | 保留平台边界；Xcode、Simulator、真机、签名和发布尚未作为完整工作流交付。 |
-| HarmonyOS | 规划中 | 保留平台边界；DevEco SDK、设备和构建工作流尚未交付。 |
+| iOS | 正在接入 | 统一命令和设备协议已预留；将基于 macOS、Xcode、Simulator 与 Apple 官方服务逐项实现。 |
+| HarmonyOS | 正在接入 | 统一命令和设备协议已预留；将基于 DevEco、HarmonyOS SDK 与 HDC 官方能力逐项实现。 |
 
-本仓库当前只承诺完整的 Android 开发体验。
+现在就可以用 Mob 在 VS Code 中完成 Android 开发；后续平台不会复用 Android 工具链或绕过 Xcode、DevEco、账号、签名和宿主系统的官方要求。
 
 ## 安装
 
@@ -98,6 +102,8 @@ bash install.sh --version latest --install-dir "$HOME/.local/bin"
 已验证的下载会缓存到 `~/.mob/cache/releases`。安装脚本见 [PowerShell](scripts/install.ps1) 与 [Bash](scripts/install.sh)。
 
 ## 快速开始
+
+Android 已完整可用。
 
 ### 在 VS Code 打开已有 Android 项目
 
@@ -151,6 +157,8 @@ mob run --mirror
 
 ## VS Code 扩展
 
+点击即可运行。
+
 [Mob for VS Code](https://marketplace.visualstudio.com/items?itemName=xiaoyun.mob-vscode) 是 CLI 的可视化入口。扩展不会自行扫描 SDK 或直接调用 ADB、Emulator；所有环境、设备和工作流仍由同一个 `mob` CLI 处理。
 
 在 Activity Bar 的 Mob 视图中可以：
@@ -167,6 +175,8 @@ mob run --mirror
 
 ## AI 与自动化接口
 
+给 AI 一个能真正运行项目的接口。
+
 Mob 面向人提供可读的终端输出，也面向 AI、编辑器扩展和 CI 提供机器接口。工具无需解析一段不稳定的报错文字，即可判断当前环境、进度与下一步动作：
 
 ```powershell
@@ -182,7 +192,7 @@ mob run --accept-licenses --json=events
 | `--json` | 查询或有限工作流 | 一个终态 JSON 对象，含 `schemaVersion`、`event`、`ok` 与 `data` 或 `error`。 |
 | `--json=events` | build、run、debug、logs 等长任务 | JSON Lines 事件流；不混入进度条与外部工具原始输出。 |
 
-AI 开发 Android 项目时，可以先读取帮助契约和当前状态，再准备环境、构建、运行、调试与检查设备 UI：
+AI 开发 Android 项目时，可以先读取帮助契约和当前状态，再准备环境、构建、运行、调试与检查设备 UI。随着 iOS 和 HarmonyOS 平台适配器交付，同一接口会扩展到对应平台，而不是让 AI 学习另一套环境变量与设备命令：
 
 ```powershell
 mob doctor --fix --accept-licenses --json=events

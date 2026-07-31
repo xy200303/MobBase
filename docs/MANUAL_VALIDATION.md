@@ -1,6 +1,6 @@
 # Mob Android 手动验证清单
 
-本清单验证 Mob 的核心承诺：在不安装完整 Android Studio、也不手动配置 VS Code Android 环境的前提下，开发者可从终端或 VS Code 使用标准 Android 工具链完成项目创建、构建、运行、调试和设备操作。
+本清单验证 Mob 跨平台产品愿景的首个完整适配器：在不安装完整 Android Studio、也不手动配置 VS Code Android 环境的前提下，开发者可从终端或 VS Code 使用标准 Android 工具链完成项目创建、构建、运行、调试和设备操作。iOS 与 HarmonyOS 的等价清单会在各自官方适配器交付后补充。
 
 它用于在 Windows PowerShell 中验证一个实际构建的 `mob.exe`。所有 Android 下载均来自官方 `sdkmanager`；首次安装会要求显式传入 `--accept-licenses`。命令的 JSON 输出也应可被 VS Code、CI 与 AI 工具直接消费，而无需解析终端 UI。
 
