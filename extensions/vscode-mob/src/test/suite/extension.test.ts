@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 
 suite("Mob VS Code extension", () => {
   test("registers Android workflow and device commands", async () => {
-    const extension = vscode.extensions.getExtension("xy200303.mob-vscode");
+    const extension = vscode.extensions.getExtension("xiaoyun.mob-vscode");
     assert.ok(extension, "Mob extension was not discovered by the Extension Host");
     await extension.activate();
 
